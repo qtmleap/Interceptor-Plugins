@@ -110,3 +110,5 @@ GitHubの公開リポジトリでは、60日間活動がないとscheduleが無�
 - LocalGPTはブラウザ未接続のため、この件の計画レビューは未実施。接続の迂回や、ファイルを貼り付けた代替レビューは行っていない。
 - [GitHub Pagesのカスタムworkflow](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
 - [scheduleの無効化と再有効化](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/disable-and-enable-workflows)
+
+実装時の検証結果: 当初のmacos-15 runnerでは既定のSwift 6.1が固定ライブラリのactor-isolationコードを拒否した。実際のCIは公式のxcode-27 hosted imageとXcode 27.0.0（Swift 6.4）を明示的に使用し、ネイティブ検証と揃える。古いコンパイラは取得前に拒否する。上流ソースや並行処理チェック、packageのmacOS 14 deployment targetは変更しない。

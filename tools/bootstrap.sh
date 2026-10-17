@@ -11,6 +11,13 @@ print(pin)
 PY
 )
 command -v swift >/dev/null
+python3 - <<'PY'
+import re, subprocess
+result = subprocess.run(['swift', '--version'], capture_output=True, text=True)
+match = re.search(r'\bSwift version (\d+)\.(\d+)', result.stdout + result.stderr, re.I)
+if result.returncode or not match or tuple(map(int, match.groups())) < (6, 4):
+    raise SystemExit('Repository checks require Swift 6.4 or later; select Xcode 27.0.')
+PY
 if [[ -e "$TASK_SOURCE" ]]; then
     [[ -d "$TASK_SOURCE/.git" ]] || { echo 'upstream cache is not a Git checkout' >&2; exit 1; }
     [[ "$(git -C "$TASK_SOURCE" remote get-url origin)" == 'https://github.com/qtmleap/Interceptor.git' ]] || { echo 'upstream remote mismatch' >&2; exit 1; }

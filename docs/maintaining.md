@@ -4,7 +4,7 @@ The repository maintainer is responsible for feed expiry, scheduled-workflow sta
 
 ## Local checks
 
-Run `tools/check.sh` on macOS 14+ with Swift 6+, Python 3 and Git. This is also the complete CI command. The upstream runtime is a sparse checkout at the full SHA in `repository-config.json`; a different or modified cache is refused. If updating the pin deliberately, preserve or remove only your own `.tools/interceptor` cache, review the new source, and run all checks again.
+Run `tools/check.sh` with Xcode 27.0 (Swift 6.4), Python 3 and Git. This is also the complete CI command. CI selects the hosted `xcode-27` image and explicitly sets `DEVELOPER_DIR` to Xcode 27.0.0. The older default Swift 6.1 on `macos-15` cannot compile the pinned library's actor-isolation code; checks fail early on unsupported compilers. The library's macOS 14 deployment target is unchanged. The upstream runtime is a sparse checkout at the full SHA in `repository-config.json`; a different or modified cache is refused. If updating the pin deliberately, preserve or remove only your own `.tools/interceptor` cache, review the new source, and run all checks again.
 
 The checks exercise real QuickJS outputs, generation determinism, a known wrong event shape, signed metadata, package/payload tampering, wrong keys and bounded HTTPS behavior. Keys for these tests live in a temporary directory outside Git and the published site, and are removed on exit. Test output is in `build/evidence/`; generated packages are in `build/site/`. Neither belongs in Git.
 

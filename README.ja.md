@@ -29,7 +29,7 @@ https://qtmleap.github.io/Interceptor-Plugins/repository.json
 
 ## ローカルでテストする
 
-macOS 14以降、Swift 6以降、Python 3、Gitが必要です。リポジトリのルートで実行します。
+検証にはXcode 27.0（Swift 6.4）が使えるMac、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
 
 ```sh
 tools/check.sh

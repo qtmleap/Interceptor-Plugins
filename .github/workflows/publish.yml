@@ -17,7 +17,9 @@ concurrency:
 jobs:
   publish:
     if: github.ref == 'refs/heads/main'
-    runs-on: macos-15
+    runs-on: xcode-27
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.0.0.app/Contents/Developer
     timeout-minutes: 25
     environment:
       name: github-pages

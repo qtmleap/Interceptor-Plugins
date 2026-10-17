@@ -85,3 +85,5 @@
 ## Execution
 
 User authorized implementation/tests/publication without additional confirmation. Codex executes and integrates; Claude implements Task 1 after plan feasibility review. LocalGPT unavailable (browser disconnected); do not bypass it or claim a LocalGPT review. No simulator resources are needed for these logic/tooling tests.
+
+Execution correction: the initial macos-15 runner selected Swift 6.1, which rejects the pinned library's actor-isolation code. CI now uses the official hosted xcode-27 image and explicitly selects Xcode 27.0.0 (Swift 6.4), matching the validated native toolchain. Bootstrap rejects older Swift before fetching. No upstream source or concurrency checking is changed; the package deployment target remains macOS 14.

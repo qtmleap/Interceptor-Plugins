@@ -29,7 +29,7 @@ This preview runs explicit synthetic input and displays the returned intent. It 
 
 ## Run the checks
 
-Requires macOS 14+, Swift 6+, Python 3 and Git. From this checkout:
+The checks use Xcode 27.0 (Swift 6.4), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
 
 ```sh
 tools/check.sh
