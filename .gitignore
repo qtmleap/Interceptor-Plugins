@@ -1,0 +1,10 @@
+.tools/
+.build/
+build/
+__pycache__/
+*.pyc
+.DS_Store
+*.key
+*.pem
+tools/Verifier/.build/
+tools/Verifier/.swiftpm/
