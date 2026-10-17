@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "5B478646-4A70-4EF1-B04B-6CB63450E5A4",
+  "name": "Server error filter",
+  "version": "1.0.0",
+  "subscriptions": [
+    {
+      "phase": "response.completed",
+      "match": {
+        "hosts": [
+          "example.com"
+        ],
+        "status": {
+          "min": 500,
+          "max": 599
+        }
+      }
+    }
+  ],
+  "read": {
+    "metadata": [
+      "method",
+      "host",
+      "status"
+    ],
+    "headers": [],
+    "queryKeys": [],
+    "body": {
+      "mode": "none"
+    }
+  },
+  "endpointBindings": [
+    "preview"
+  ],
+  "settings": {}
+}

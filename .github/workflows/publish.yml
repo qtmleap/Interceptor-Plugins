@@ -1,0 +1,86 @@
+name: Publish signed repository
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 2 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-plugin-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 25
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Require configured repository, main and public fingerprint
+        run: python3 tools/guard.py --root . --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
+      - name: Run all checks without the official key
+        run: tools/check.sh
+      - name: Restore the signing key outside the checkout
+        env:
+          INTERCEPTOR_REPOSITORY_KEY_B64: ${{ secrets.INTERCEPTOR_REPOSITORY_KEY_B64 }}
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          value = os.environ.get('INTERCEPTOR_REPOSITORY_KEY_B64', '')
+          if not value:
+              raise SystemExit('Signing environment Secret is missing; unsigned fallback is forbidden')
+          raw = base64.b64decode(value, validate=True)
+          if len(raw) != 32:
+              raise SystemExit('Signing Secret must encode a raw 32-byte key')
+          path = Path(os.environ['RUNNER_TEMP']) / 'interceptor-plugin-repository.key'
+          fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+          with os.fdopen(fd, 'wb') as file:
+              file.write(raw)
+          PY
+      - name: Verify previous metadata and sign the new feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          export INTERCEPTOR_SIGNING_KEY_PATH="$RUNNER_TEMP/interceptor-plugin-repository.key"
+          tools/publish.sh
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
+        with:
+          path: build/site
+      - name: Refuse stale main before deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+      - name: Deploy generated feed and packages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
+      - name: Read back exact sequence, signature, expiry and package hashes
+        run: |
+          verifier="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
+          sequence="$(cat build/sequence.txt)"
+          for attempt in 1 2 3 4 5 6; do
+            if "$verifier" verify-live "$PWD" "$sequence"; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 6 ]; then sleep 10; fi
+          done
+          exit 1
+      - name: Delete only this job's restored key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/interceptor-plugin-repository.key"
