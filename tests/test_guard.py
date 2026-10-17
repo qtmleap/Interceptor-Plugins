@@ -5,7 +5,7 @@ import unittest
 from helpers import (Case, FP_A, FP_B, OFFICIAL_PLUGIN_IDS, OFFICIAL_REPOSITORY, OFFICIAL_REPOSITORY_ID, OFFICIAL_URL,
                      tree_digest)
 
-REF = "refs/heads/main"
+REF = "refs/heads/master"
 OTHER_URL = "https://alice.github.io/my-plugins/repository.json"
 NEW_ID = "11111111-2222-4333-8444-555555555555"
 
@@ -51,9 +51,9 @@ class GuardTests(Case):
                 self.write_config(root, publicKeyFingerprint=bad)
                 self.fails(self.guard(root))
 
-    def test_ref_must_be_main_branch(self):
+    def test_ref_must_be_master_branch(self):
         root = self.official()
-        for ref in ("refs/heads/dev", "main", "refs/tags/main", "refs/pull/1/merge", "refs/heads/main2", "refs/heads/main/", ""):
+        for ref in ("refs/heads/dev", "refs/heads/main", "master", "refs/tags/master", "refs/pull/1/merge", "refs/heads/master2", "refs/heads/master/", ""):
             with self.subTest(ref=ref):
                 self.fails(self.guard(root, ref=ref))
 

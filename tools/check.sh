@@ -20,7 +20,7 @@ TASK_REPO_ID=$(python3 -c 'import json; print(json.load(open("repository-config.
 TASK_REPO_NAME=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["name"])')
 TASK_REPOSITORY=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["githubRepository"])')
 if python3 -c 'import json,sys; sys.exit(json.load(open("repository-config.json"))["publicKeyFingerprint"] is None)'; then
-    python3 tools/guard.py --root "$TASK_ROOT" --repository "$TASK_REPOSITORY" --ref refs/heads/main
+    python3 tools/guard.py --root "$TASK_ROOT" --repository "$TASK_REPOSITORY" --ref refs/heads/master
 fi
 "$TASK_VERIFIER" samples "$TASK_ROOT" "$TASK_TEMP/site"
 python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERIFIER" --publisher "$TASK_PUBLISHER"

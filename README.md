@@ -63,12 +63,12 @@ Sources live in `scripts/` and `manifests/`; expected input and output live in `
    ```
 
 4. Edit a script and its manifest together, update its version, and add a fixture with literal expected output. Keep the v1 package and action contracts. Run `tools/check.sh`.
-5. Follow [Maintaining and publishing](docs/maintaining.md) to create a main-restricted signing environment, store your own secret, enable Pages, and verify the live URL. Publish the fingerprint through a separate trusted channel.
+5. Follow [Maintaining and publishing](docs/maintaining.md) to create a master-restricted signing environment, store your own secret, enable Pages, and verify the live URL. Publish the fingerprint through a separate trusted channel.
 
 An unsigned local feed is supported for development and requires the app's unverified-repository acknowledgment. SHA-256 detects package differences against an index; an unsigned server can replace both. Official deployment fails if its signing key is absent.
 
 ## Operations
 
-Generated metadata expires after 30 days. Pushes to `main`, manual runs and the weekly publishing workflow renew it. GitHub can disable schedules after 60 days without repository activity; maintainers must check workflow state and feed expiry. See [recovery, key handling and verification](docs/maintaining.md).
+Generated metadata expires after 30 days. Pushes to `master`, manual runs and the weekly publishing workflow renew it. GitHub can disable schedules after 60 days without repository activity; maintainers must check workflow state and feed expiry. See [recovery, key handling and verification](docs/maintaining.md).
 
 MIT licensed. Interceptor's reused tooling and its vendored QuickJS retain their upstream licenses.
