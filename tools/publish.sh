@@ -3,11 +3,11 @@ set -euo pipefail
 TASK_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$TASK_ROOT"
 : "${GITHUB_REPOSITORY:?use the configured GitHub repository}"
-: "${GITHUB_REF:?use refs/heads/main}"
+: "${GITHUB_REF:?use refs/heads/master}"
 python3 tools/guard.py --root "$TASK_ROOT" --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
 : "${INTERCEPTOR_SIGNING_KEY_PATH:?a key outside the checkout is required}"
-TASK_REMOTE_HEAD=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)
-[[ "$(git rev-parse HEAD)" == "$TASK_REMOTE_HEAD" ]] || { echo 'stale main: refusing publication' >&2; exit 1; }
+TASK_REMOTE_HEAD=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/master" --jq .object.sha)
+[[ "$(git rev-parse HEAD)" == "$TASK_REMOTE_HEAD" ]] || { echo 'stale master: refusing publication' >&2; exit 1; }
 TASK_VERIFIER="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
 TASK_PUBLISHER="$(swift build --package-path .tools/interceptor/Packages/InterceptorAutomation --configuration release --show-bin-path)/interceptor-repository"
 TASK_URL=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["repositoryURL"])')

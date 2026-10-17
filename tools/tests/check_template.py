@@ -27,7 +27,7 @@ def main():
 
         run(sys.executable, "tools/configure.py", "--root", root, "--repository", "sample-owner/my-plugins", "--name", "Template smoke test", "--url", "https://sample-owner.github.io/my-plugins/repository.json", "--fingerprint", "a" * 64)
         run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v")
-        run(sys.executable, "tools/guard.py", "--root", root, "--repository", "sample-owner/my-plugins", "--ref", "refs/heads/main")
+        run(sys.executable, "tools/guard.py", "--root", root, "--repository", "sample-owner/my-plugins", "--ref", "refs/heads/master")
         site = root / "site"
         run(sys.executable, "tools/build.py", "--root", root, "--output", site)
         run(args.verifier, "samples", root, site)

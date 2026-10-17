@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""python3 tools/guard.py --root ROOT --repository OWNER/NAME --ref refs/heads/main
+"""python3 tools/guard.py --root ROOT --repository OWNER/NAME --ref refs/heads/master
 
 Signed-deployment identity check, run before any key is touched. Passes only when the configured repository
 matches the argument, a signing fingerprint is configured, and official identities (reserved in
@@ -17,8 +17,8 @@ def main(argv):
     if not root.is_dir():
         raise ToolError(f"root is not a directory: {root}")
     repository = check_repository(options["--repository"])
-    if options["--ref"] != "refs/heads/main":
-        raise ToolError("signed deployment requires refs/heads/main")
+    if options["--ref"] != "refs/heads/master":
+        raise ToolError("signed deployment requires refs/heads/master")
 
     config, reserved = load_config(root), load_reserved(root)
     plugin_ids = [manifest["id"].upper() for _, manifest, _ in load_samples(root)]

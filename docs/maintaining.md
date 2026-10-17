@@ -13,7 +13,7 @@ The checks exercise real QuickJS outputs, generation determinism, a known wrong 
 First use `tools/configure.py` as described in the README. Keep your own repository/plugin UUIDs and URL stable after publication. The shared `tools/reserved.json` retains official current and retired identities. A template that still uses an official identity is rejected before signing.
 
 1. Enable GitHub Pages with **GitHub Actions** as the build source.
-2. Create the `github-pages` environment and restrict its deployment branch policy to the branch named `main`. Do this before storing the signing secret or triggering a release. Existing organization rules remain applicable; this setup does not introduce another required human approval for each renewal.
+2. Create the `github-pages` environment and restrict its deployment branch policy to the branch named `master`. Do this before storing the signing secret or triggering a release. Existing organization rules remain applicable; this setup does not introduce another required human approval for each renewal.
 3. Store a base64 encoding of your raw 32-byte Ed25519 key in the **environment secret** named `INTERCEPTOR_REPOSITORY_KEY_B64`. Do not create it as a repository-wide secret. Never print it or put it in a workflow file.
 
    For example, pipe it directly to GitHub CLI; substitute your key and repository:
@@ -25,19 +25,19 @@ First use `tools/configure.py` as described in the README. Keep your own reposit
    ```
 
 4. Commit the **public** fingerprint in `repository-config.json` and the README, and distribute it through an independently trusted channel. Keep an offline backup of the private key. A template does not inherit the official environment or its secret.
-5. Push tested source to `main`. The publishing workflow checks the configured identity, runs the full suite without the official key, restores the environment secret to a 0600 file under `RUNNER_TEMP`, signs, deploys only `build/site/`, and removes that file on every outcome.
+5. Push tested source to `master`. The publishing workflow checks the configured identity, runs the full suite without the official key, restores the environment secret to a 0600 file under `RUNNER_TEMP`, signs, deploys only `build/site/`, and removes that file on every outcome.
 
-PR checks have read-only repository permissions and no signing environment. The publish workflow is limited to `main`; its environment branch restriction is a second boundary. It fails when the secret is missing or its fingerprint differs from the config, instead of falling back to an unsigned official feed.
+PR checks have read-only repository permissions and no signing environment. The publish workflow is limited to `master`; its environment branch restriction is a second boundary. It fails when the secret is missing or its fingerprint differs from the config, instead of falling back to an unsigned official feed.
 
 ## Sequence, expiry and verification
 
-The publisher creates metadata valid for 30 days. The workflow runs on main pushes, manual dispatch and weekly on Monday at 02:17 UTC (11:17 Japan time). The entire publishing workflow shares one concurrency group with `cancel-in-progress: false`. A stale main SHA is a failure; confirm the newer main run completes or dispatch it manually.
+The publisher creates metadata valid for 30 days. The workflow runs on master pushes, manual dispatch and weekly on Monday at 02:17 UTC (11:17 Japan time). The entire publishing workflow shares one concurrency group with `cancel-in-progress: false`. A stale master SHA is a failure; confirm the newer master run completes or dispatch it manually.
 
 `tools/publish.sh` reads the prior feed over HTTPS, refusing redirects and any non-200 status except an initial 404. It authenticates the prior index against the configured key and UUID, even when expired, before using its sequence. This expiry exception is only for renewal preflight. App import and final live verification still enforce current time.
 
 The new sequence is current Unix milliseconds and must strictly increase. It is not an arbitrary workflow input. Clock rollback or invalid metadata stops publication. After deployment, the app's own `RepositoryClient` fetches the exact sequence, checks the signature/fingerprint and at least 14 days of remaining validity, then fetches and checks every package. Bounded retries only read; they do not re-sign or re-deploy.
 
-GitHub disables public-repository schedules after 60 days without repository activity, and template schedules are disabled initially. Weekly jobs do not guarantee perpetual availability. Check workflow state and feed expiry weekly; failure notifications do not cover a disabled job that never runs. To recover, re-enable **Publish signed repository**, run it manually on `main`, and wait for both deployment and live verification. Installed revisions remain offline; expiry affects refresh/import.
+GitHub disables public-repository schedules after 60 days without repository activity, and template schedules are disabled initially. Weekly jobs do not guarantee perpetual availability. Check workflow state and feed expiry weekly; failure notifications do not cover a disabled job that never runs. To recover, re-enable **Publish signed repository**, run it manually on `master`, and wait for both deployment and live verification. Installed revisions remain offline; expiry affects refresh/import.
 
 ## Verify a deployed run manually
 
