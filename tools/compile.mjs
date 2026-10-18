@@ -20,7 +20,8 @@ function regular(file) {
   }
 }
 try {
-  if (ts.version !== '5.8.3') throw new Error('Run npm ci to install the pinned TypeScript 5.8.3 compiler');
+  if (globalThis.Bun?.version !== '1.3.6') throw new Error('Use the pinned Bun 1.3.6 runtime (see .bun-version)');
+  if (ts.version !== '5.8.3') throw new Error('Run bun install --frozen-lockfile --ignore-scripts to install the pinned TypeScript 5.8.3 compiler');
   const sourceDir = path.join(root, 'src');
   if (fs.lstatSync(sourceDir).isSymbolicLink()) throw new Error('src cannot be a symlink');
   const entries = fs.readdirSync(sourceDir).sort();

@@ -8,6 +8,8 @@ A local `npm run setup` command uses the maintainer's existing GitHub CLI authen
 
 Subsequent master pushes run installation, type checking, real QuickJS tests, exact-byte packaging, SHA-256/index signing, Pages deployment and live verification. PR checks never obtain the signing environment. The setup command prints the future registration URL and public fingerprint with an explicit reminder to await successful live verification and publish the fingerprint through a trusted independent channel.
 
-CI uses the existing verified hosted xcode-27 image and pinned actions; dependencies use an exact TypeScript version and npm lockfile. Ordinary clones retain the signed-feed expiration and weekly-renewal constraints.
+CI uses the existing verified hosted xcode-27 image and pinned actions; dependencies use TypeScript 5.8.3 and a frozen Bun lockfile, with Bun 1.3.6 pinned in packageManager and .bun-version. Ordinary clones retain the signed-feed expiration and weekly-renewal constraints.
 
 Verification covers type errors, unsupported host/module/async usage, duplicate helper names across independent plugins, stale generated output, deterministic package bytes, synthetic QuickJS results, template configuration and interrupted setup. API/key tests use temporary fixtures and fakes; no official key or remote configuration is touched.
+
+The user-selected Bun toolchain also runs in the adapted qtmleap/devcontainers Hono/Node development container. It provides portable authoring/HTTPS checks on Linux while retaining all native Mac signing and QuickJS gates. Host credentials and private signing keys are not mounted; Git remains guarded until the container has a verified human login. Adoption revision and scoped adaptations are documented in docs/devcontainer.md.

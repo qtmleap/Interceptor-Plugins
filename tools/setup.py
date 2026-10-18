@@ -14,6 +14,7 @@ import os
 import re
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -451,6 +452,8 @@ def main(argv):
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--state-dir', type=Path, help='private directory outside every Git checkout (default: ~/.config/interceptor/repositories/OWNER--NAME)')
     args = parser.parse_args(argv)
+    if sys.platform != 'darwin':
+        raise ToolError('Signing setup requires macOS with Xcode 27; run authoring checks in the container and initialize signing on your Mac')
     root = args.root.resolve()
     result = setup_repository(root, GitHub(), NativeKeyTool(root), state_dir=args.state_dir)
     print('Local and GitHub setup complete. No commit, push or deployment was started.')

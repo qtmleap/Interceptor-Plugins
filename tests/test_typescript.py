@@ -96,7 +96,7 @@ class TypeScriptTests(Case):
                 self.fails(result)
                 self.assertFalse(out.exists())
 
-    def test_configure_and_guard_do_not_require_generated_sources_or_node(self):
+    def test_configure_and_guard_do_not_require_generated_sources_or_runtime(self):
         root = self.authored_root()
         self.ok(self.run_tool(root, "configure", "--repository", "alice/ts-plugins", "--name", "Typed plugins",
                               "--url", "https://alice.github.io/ts-plugins/repository.json", "--fingerprint", "a" * 64))
@@ -112,3 +112,21 @@ class TypeScriptTests(Case):
                 result, out = self.build(root, f"contract-{index}")
                 self.fails(result)
                 self.assertFalse(out.exists())
+
+    def test_packaging_executes_with_bun_and_no_node_on_path(self):
+        import os
+        import subprocess
+        import sys
+        root = self.authored_root()
+        binary = self.tmp / 'bun-only-bin'
+        binary.mkdir()
+        bun = shutil.which('bun')
+        self.assertIsNotNone(bun, 'Bun is required for the authoring suite')
+        (binary / 'bun').symlink_to(bun)
+        result = subprocess.run([sys.executable, str(root / 'tools/build.py'), '--root', str(root),
+                                 '--output', str(self.tmp / 'without-node')],
+                                env=dict(os.environ, PATH=str(binary)), capture_output=True, text=True, timeout=60)
+        self.ok(result)
+        source = json.loads((self.tmp / 'without-node/plugins/request-summary.json').read_text())['source']
+        self.assertIn('function onRequest', source)
+        self.assertNotIn(': Interceptor.Event', source)

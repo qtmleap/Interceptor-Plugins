@@ -18,16 +18,16 @@ def main():
     with tempfile.TemporaryDirectory(prefix="interceptor-template-") as directory:
         root = Path(directory)
         ignore = shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc")
-        for name in (".github", "tools", "tests", "src", "types", "manifests", "fixtures"):
+        for name in (".github", ".devcontainer", "tools", "tests", "src", "types", "manifests", "fixtures"):
             shutil.copytree(args.root / name, root / name, ignore=ignore)
         shutil.copy(args.root / "repository-config.json", root / "repository-config.json")
-        for name in ("package.json", "package-lock.json", ".node-version"):
+        for name in ("package.json", "bun.lock", ".bun-version"):
             shutil.copy(args.root / name, root / name)
-        (root / "node_modules").symlink_to((args.root / "node_modules").resolve(), target_is_directory=True)
 
         def run(*command):
             subprocess.run([str(value) for value in command], cwd=root, check=True)
 
+        run("bun", "install", "--frozen-lockfile", "--ignore-scripts")
         run(sys.executable, "tools/configure.py", "--root", root, "--repository", "sample-owner/my-plugins", "--name", "Template smoke test", "--url", "https://sample-owner.github.io/my-plugins/repository.json", "--fingerprint", "a" * 64)
         run(sys.executable, "-m", "unittest", "discover", "-s", "tests", "-v")
         run(sys.executable, "tools/guard.py", "--root", root, "--repository", "sample-owner/my-plugins", "--ref", "refs/heads/master")

@@ -27,13 +27,17 @@ For the filter's no-action case, change the response status in the test input to
 
 This preview runs explicit synthetic input and displays the returned intent. It does not connect these samples to captured traffic, run them in the background, or deliver webhooks. Imports are stored disabled. No request body, headers or query values are requested by these samples.
 
+## Development container
+
+The [development container](docs/devcontainer.md) uses `qtmleap/devcontainers` with pinned Bun and Python. Open it with **Dev Containers: Reopen in Container**, then run `bun run check:authoring`. Full native checks and first signing setup run on a Mac.
+
 ## Run the checks
 
-The checks use Xcode 27.0 (Swift 6.4), Node.js (the version in `.node-version`), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
+The checks use Xcode 27.0 (Swift 6.4), Bun (the version in `.bun-version`), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
 
 ```sh
-npm ci --ignore-scripts
-npm run check
+bun install --frozen-lockfile --ignore-scripts
+bun run check
 ```
 
 The command fetches the pinned public Interceptor source, builds its publisher and QuickJS driver, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
@@ -46,9 +50,9 @@ Canonical sources live in `src/*.ts` and `manifests/`; expected input and output
 2. On a compatible Mac with GitHub CLI authenticated as a repository administrator, run:
 
    ```sh
-   npm ci --ignore-scripts
-   npm run setup
-   npm run check
+   bun install --frozen-lockfile --ignore-scripts
+   bun run setup
+   bun run check
    ```
 
    Setup allocates new repository/plugin IDs, creates your signing key outside Git, stores its environment secret behind a master-only deployment policy, sets Pages to use Actions and enables publishing. It preserves existing protections and refuses unknown keys/secrets or an official checkout. Keep a secure backup of `~/.config/interceptor/repositories/OWNER--NAME/`: it holds your private key and retry checkpoint. Re-running setup resumes the same identity and key. No commit, push or deployment is performed by setup.

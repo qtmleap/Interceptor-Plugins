@@ -431,10 +431,10 @@ def load_samples(root):
     scripts_dir = root / "scripts"
     if authored:
         # A fresh compile is mandatory: never trust a generated file or an mtime/cache stamp.
-        result = subprocess.run(["node", str(root / "tools/compile.mjs"), str(root)],
+        result = subprocess.run(["bun", str(root / "tools/compile.mjs"), str(root)],
                                 capture_output=True, text=True)
         if result.returncode:
-            raise ToolError("TypeScript compilation failed; run npm ci first if dependencies are missing:\n" + result.stderr)
+            raise ToolError("TypeScript compilation failed; run bun install --frozen-lockfile --ignore-scripts first if dependencies are missing:\n" + result.stderr)
         emitted = parse_json_object(result.stdout.encode("utf-8"), "compiler output")
         if set(emitted) != {name for name, _ in manifests}:
             raise ToolError("compiler outputs do not match manifests")

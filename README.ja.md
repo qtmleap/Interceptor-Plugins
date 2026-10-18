@@ -27,13 +27,17 @@ https://qtmleap.github.io/Interceptor-Plugins/repository.json
 
 現在のプレビューは、明示的に渡した合成入力で実行し、返されたアクションを表示します。サンプルを実キャプチャへ自動接続したり、バックグラウンドで実行したり、Webhookへ送信したりはしません。読み込み時は無効状態で保存します。この2本は本文・ヘッダー・クエリ値を要求しません。
 
+## コンテナで開発する
+
+[qtmleap/devcontainersを基にした開発環境](docs/devcontainer.md)を用意しています。VS Codeの **Dev Containers: Reopen in Container** で開き、`bun run check:authoring` でBun・Python・HTTPSの検証を実行できます。実QuickJS・署名の全体検証と初回の署名セットアップはMacで行います。
+
 ## ローカルでテストする
 
-検証にはXcode 27.0（Swift 6.4）が使えるMac、Node.js（`.node-version` のバージョン）、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
+検証にはXcode 27.0（Swift 6.4）が使えるMac、Bun（`.bun-version` のバージョン）、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
 
 ```sh
-npm ci --ignore-scripts
-npm run check
+bun install --frozen-lockfile --ignore-scripts
+bun run check
 ```
 
 固定した公開Interceptorソースを取得し、既存publisherとQuickJS検証ツールをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改変検知を確認します。公式の秘密鍵は使わず、公開処理も行いません。
@@ -46,9 +50,9 @@ npm run check
 2. 対応するMacでGitHub CLIに管理者権限のあるアカウントでログインし、実行します。
 
    ```sh
-   npm ci --ignore-scripts
-   npm run setup
-   npm run check
+   bun install --frozen-lockfile --ignore-scripts
+   bun run setup
+   bun run check
    ```
 
    セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のenvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
