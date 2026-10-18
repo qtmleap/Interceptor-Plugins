@@ -24,7 +24,7 @@ try {
   if (ts.version !== '5.8.3') throw new Error('Run bun install --frozen-lockfile --ignore-scripts to install the pinned TypeScript 5.8.3 compiler');
   const sourceDir = path.join(root, 'src');
   if (fs.lstatSync(sourceDir).isSymbolicLink()) throw new Error('src cannot be a symlink');
-  const entries = fs.readdirSync(sourceDir).sort();
+  const entries = fs.readdirSync(sourceDir).filter(entry => entry !== '.DS_Store').sort();
   if (!entries.length) throw new Error('No TypeScript plugins found');
   const outputs = {};
   const sdk = path.join(root, 'types/interceptor.d.ts');

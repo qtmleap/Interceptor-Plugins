@@ -29,7 +29,7 @@ The following manual procedure remains available for existing feeds. Generate yo
 4. Commit the **public** fingerprint in `repository-config.json` and the README, and distribute it through an independently trusted channel. Keep an offline backup of the private key. A template does not inherit the official environment or its secret.
 5. Push tested source to `master`. The publishing workflow checks the configured identity, runs the full suite without the official key, restores the environment secret to a 0600 file under `RUNNER_TEMP`, signs, deploys only `build/site/`, and removes that file on every outcome.
 
-PR checks have read-only repository permissions and no signing environment. The publish workflow is limited to `master`; its environment branch restriction is a second boundary. It fails when the secret is missing or its fingerprint differs from the config, instead of falling back to an unsigned official feed.
+PR checks have read-only repository permissions and no signing environment. The secret-free publishing preflight reads the existing environment and its complete deployment policy with Actions read permission before any job references it. Missing, unreadable or non-master-only policy fails without creating or changing an environment. The publish workflow is limited to `master`; its environment branch restriction is a second boundary. It fails when the secret is missing or its fingerprint differs from the config, instead of falling back to an unsigned official feed.
 
 ## Sequence, expiry and verification
 

@@ -130,3 +130,20 @@ class TypeScriptTests(Case):
         source = json.loads((self.tmp / 'without-node/plugins/request-summary.json').read_text())['source']
         self.assertIn('function onRequest', source)
         self.assertNotIn(': Interceptor.Event', source)
+
+
+    def test_ds_store_does_not_change_emitted_javascript_or_packages(self):
+        root = self.authored_root()
+        result, baseline = self.build(root, 'clean-metadata')
+        self.ok(result)
+        sources = {path.name: path.read_bytes() for path in (root / 'build/scripts').iterdir()}
+        (root / 'src/.DS_Store').write_bytes(b'Finder metadata\x00\xff')
+        result, actual = self.build(root, 'finder-metadata')
+        self.ok(result)
+        self.assertEqual({path.name: path.read_bytes() for path in (root / 'build/scripts').iterdir()}, sources)
+        for name in ('request-summary.json', 'server-error-filter.json'):
+            self.assertEqual((actual / 'plugins' / name).read_bytes(), (baseline / 'plugins' / name).read_bytes())
+        (root / 'src/notes.txt').write_text('unexpected source directory entry')
+        result, output = self.build(root, 'unexpected-file')
+        self.fails(result)
+        self.assertFalse(output.exists())

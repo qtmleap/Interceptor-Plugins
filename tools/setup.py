@@ -223,6 +223,8 @@ def environment_state(api, base, allow_empty=False):
     environment = api.request('GET', base + '/environments/' + ENVIRONMENT, missing_ok=True)
     if environment is None:
         return None
+    if not isinstance(environment, dict):
+        raise ToolError('GitHub returned an invalid environment response')
     if environment.get('deployment_branch_policy') != MASTER_POLICY:
         raise ToolError('existing github-pages environment is not restricted to custom master-only branches; inspect it manually')
     policies = collection(api, base + '/environments/' + ENVIRONMENT + '/deployment-branch-policies', 'branch_policies')

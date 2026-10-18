@@ -1,4 +1,4 @@
-"""Keep the authoring container independent from private host state and macOS signing."""
+"""Verify explicit project mounts and keep macOS signing outside the authoring container."""
 import json
 import unittest
 
@@ -6,7 +6,7 @@ from helpers import REPO
 
 
 class DevcontainerTests(unittest.TestCase):
-    def test_unprivileged_workspace_without_host_credentials_or_docker(self):
+    def test_project_config_adds_no_host_credentials_or_docker_mounts(self):
         config = json.loads((REPO / '.devcontainer/devcontainer.json').read_text())
         self.assertEqual(config['remoteUser'], 'vscode')
         self.assertEqual(config['service'], 'app')

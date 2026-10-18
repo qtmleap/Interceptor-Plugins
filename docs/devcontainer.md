@@ -4,7 +4,18 @@ The configuration is adapted from [qtmleap/devcontainers](https://github.com/qtm
 
 Open this checkout with VS Code **Dev Containers: Reopen in Container**. Docker must be running. The Ubuntu 24.04 container supplies Bun 1.3.6, Python 3, OpenSSL, GitHub CLI and the upstream `ghcr.io/tkgstrator/commitguard:1` feature. Base/Bun images are pinned by digest; feature resolution is recorded in the Dev Container lockfile. The workspace is mounted at `/home/vscode/app`, with a separate Linux `node_modules` volume.
 
-The commit guard requires a verified human GitHub login and keeps Git blocked until activation succeeds. This configuration adds no host credential or signing-key mounts. VS Code Dev Containers can separately copy Git configuration, forward its host credential helper and forward an SSH agent, according to local client settings. This project does not change those settings: developers who require credential isolation should review `dev.containers.copyGitConfig`, `dev.containers.gitCredentialHelperConfigLocation` and SSH-agent forwarding before reopening. CLI-based verification does not establish the VS Code client's forwarding behavior. If initial creation stops at authentication, run `gh auth login -h github.com` inside the container, then `/usr/local/share/commitguard/setup` and **Rebuild Container** to finish the lifecycle. As in the upstream template, activation installs its managed policy/skill files in the workspace; review any instruction-file changes. The generated `.codex/` and `.claude/` state is ignored.
+The commit guard requires a verified human GitHub login and keeps Git blocked until activation succeeds. This configuration adds no host credential or signing-key mounts. VS Code Dev Containers can separately copy Git configuration, forward its host credential helper and forward an SSH agent, according to local client settings. This project does not change those settings: developers who require credential isolation should review `dev.containers.copyGitConfig`, `dev.containers.gitCredentialHelperConfigLocation` and SSH-agent forwarding before reopening. CLI-based verification does not establish the VS Code client's forwarding behavior. If initial creation stops at authentication, open a terminal in the existing container (use **Dev Containers: Attach to Running Container** if needed) and complete recovery there:
+
+```sh
+cd /home/vscode/app
+gh auth login -h github.com
+/usr/local/share/commitguard/setup
+bash .devcontainer/postCreateCommand.sh
+```
+
+Keep that container: rebuilding replaces its private home and loses this login. From a host with the Dev Containers CLI, `devcontainer run-user-commands --workspace-folder /absolute/path/to/checkout` can instead resume the configured lifecycle against the same running container.
+
+As in the upstream template, activation installs its managed policy/skill files in the workspace; review any instruction-file changes. The generated `.codex/` and `.claude/` state is ignored.
 
 After creation, dependencies install with `bun install --frozen-lockfile --ignore-scripts`. For daily development:
 
