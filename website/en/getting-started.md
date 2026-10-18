@@ -17,7 +17,7 @@ Open **Settings → Plugins → + → Add Repository** and enter:
 %%REPOSITORY_URL%%
 ```
 
-Before adding it, preview the source, declarations and signing-key fingerprint.
+Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect its source and manifest.
 
 ## Verifying trust
 
