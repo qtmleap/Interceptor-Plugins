@@ -49,3 +49,25 @@ jobs:
           CI_CHANGE_REASON: ${{ needs['ci-change-scope'].outputs.reason }}
         run: |
           printf '%s\n' "$CI_CHANGE_REASON" >> "$GITHUB_STEP_SUMMARY"
+
+  # Always runs and never uses the documentation-only exemption: read-only Linux, no secrets or deployment.
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install locked documentation tools
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Test documentation pipeline helpers
+        run: python3 -m unittest discover -s tests -p 'test_docs_*.py' -v
+      - name: Build and check documentation
+        run: bun run check:docs
+      - name: Check configured documentation template
+        run: python3 tools/tests/check_docs_template.py --root .

@@ -33,8 +33,37 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 tools/check_environment.py --repository "$GITHUB_REPOSITORY"
 
-  publish:
+  # Unprivileged: no environment, secrets, Pages write or OIDC. Only VitePress runs here.
+  docs-build:
     needs: [preflight]
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install locked documentation tools
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Build and check documentation
+        run: bun run check:docs
+      - name: Check configured documentation template
+        run: python3 tools/tests/check_docs_template.py --root .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: docs-site
+          path: build/docs
+          if-no-files-found: error
+          retention-days: 1
+          include-hidden-files: false
+
+  publish:
+    needs: [preflight, docs-build]
     if: github.ref == 'refs/heads/master'
     runs-on: xcode-27
     env:
@@ -84,10 +113,23 @@ jobs:
         run: |
           export INTERCEPTOR_SIGNING_KEY_PATH="$RUNNER_TEMP/interceptor-plugin-repository.key"
           tools/publish.sh
+      - name: Download the documentation built by this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: docs-site
+          path: build/docs
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Compose signed feed and documentation into one Pages tree
+        run: python3 tools/compose_pages.py --feed build/site --docs build/docs --output build/pages
+      - name: Verify the combined signed feed
+        run: |
+          verifier="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
+          "$verifier" verify-local "$PWD" build/pages --signed
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
-          path: build/site
+          path: build/pages
       - name: Refuse stale master before deployment
         env:
           GH_TOKEN: ${{ github.token }}

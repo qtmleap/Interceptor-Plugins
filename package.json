@@ -9,10 +9,16 @@
     "build": "python3 tools/build.py --root . --output build/site",
     "check": "tools/check.sh",
     "setup": "python3 tools/setup.py --root .",
-    "check:authoring": "tools/check-authoring.sh"
+    "check:authoring": "tools/check-authoring.sh",
+    "docs:context": "python3 tools/docs_context.py --root . --output build/docs-context.json",
+    "docs:dev": "bun run docs:context && bun --bun vitepress dev website",
+    "docs:build": "bun run docs:context && bun --bun vitepress build website",
+    "docs:preview": "bun --bun vitepress preview website",
+    "check:docs": "bun run docs:build && python3 tools/check_docs.py --root . --site build/docs"
   },
   "devDependencies": {
-    "typescript": "5.8.3"
+    "typescript": "5.8.3",
+    "vitepress": "1.6.4"
   },
   "packageManager": "bun@1.3.6"
 }

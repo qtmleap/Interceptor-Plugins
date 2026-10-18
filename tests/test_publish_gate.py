@@ -36,7 +36,14 @@ class PublishGateTests(unittest.TestCase):
         self.assertIn('actions: read', jobs['preflight'])
         self.assertIn('GH_TOKEN: ${{ github.token }}', jobs['preflight'])
         self.assertIn('python3 tools/check_environment.py', jobs['preflight'])
-        self.assertRegex(jobs['publish'], r'needs: \[preflight\]')
+        dependencies = re.search(r'^    needs: \[(.*?)\]', jobs['publish'], re.MULTILINE)
+        self.assertIsNotNone(dependencies)
+        self.assertEqual({part.strip() for part in dependencies.group(1).split(',')}, {'preflight', 'docs-build'})
+        self.assertIn('needs: [preflight]', jobs['docs-build'])
+        self.assertNotIn('environment:', jobs['docs-build'])
+        self.assertNotIn('secrets.', jobs['docs-build'])
+        self.assertNotIn('pages: write', jobs['docs-build'])
+        self.assertNotIn('id-token: write', jobs['docs-build'])
 
     def test_remote_gate_accepts_only_existing_master_branch_policy(self):
         gate = importlib.import_module('check_environment')

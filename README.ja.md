@@ -2,6 +2,8 @@
 
 [English](README.md)
 
+ドキュメント: [日本語](https://qtmleap.github.io/Interceptor-Plugins/) / [English](https://qtmleap.github.io/Interceptor-Plugins/en/)
+
 InterceptorのJavaScript試行機能で使える公式サンプルと、配布リポジトリのテンプレートです。TypeScriptの `.ts` とmanifestを編集し、生成したJavaScriptをアプリと同じQuickJSでテストして、署名付きのv1パッケージをHTTPSで配布できます。
 
 ## 公式リポジトリを追加する

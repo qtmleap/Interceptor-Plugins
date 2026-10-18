@@ -2,6 +2,8 @@
 
 [日本語](README.ja.md)
 
+Documentation: [English](https://qtmleap.github.io/Interceptor-Plugins/en/) / [日本語](https://qtmleap.github.io/Interceptor-Plugins/)
+
 Official examples and a repository template for Interceptor's JavaScript preview feature. Author `.ts` files and manifests, compile readable JavaScript, test it with the app's own QuickJS engine, and publish signed v1 packages over HTTPS.
 
 ## Add the official repository
