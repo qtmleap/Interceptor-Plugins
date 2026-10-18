@@ -5,10 +5,10 @@ layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
   text: プラグインを試す・作る・公開する
-  tagline: Interceptorでサンプルを読み込んで試す手順と、TypeScriptで自分のプラグインを作り、署名付きで配布する方法を案内します。
+  tagline: Interceptorでサンプルをテストデータで試す手順と、TypeScriptで自分のプラグインを作り、署名付きで配布する方法を案内します。
   actions:
     - theme: brand
-      text: サンプルを試す
+      text: テストデータで試す
       link: /getting-started
     - theme: alt
       text: プラグインを書く
@@ -27,7 +27,7 @@ features:
     details: パッケージのハッシュと一覧の署名を検証します。公開鍵の指紋は信頼できる別の経路で照合します。
     link: /getting-started#信頼の確認
   - title: テンプレートから公開
-    details: cloneしてセットアップし、masterへpushすると、CIが署名して単一のGitHub Pagesとして公開します。
+    details: clone後、セットアップで署名鍵・GitHubのSecret・Pagesを設定します。masterへのpush後は、CIが署名して公開します。
     link: /publishing
 ---
 

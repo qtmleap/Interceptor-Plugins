@@ -5,10 +5,10 @@ layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
   text: Try, build and publish plugins
-  tagline: Import and test the samples in Interceptor, or write your own TypeScript plugin and distribute signed packages.
+  tagline: Try the samples with test data in Interceptor, or write your own TypeScript plugin and distribute signed packages.
   actions:
     - theme: brand
-      text: Try the samples
+      text: Try with test data
       link: /en/getting-started
     - theme: alt
       text: Write a plugin
@@ -27,7 +27,7 @@ features:
     details: A package SHA-256 and the Ed25519 key fingerprint are different things. Compare the fingerprint through a channel you already trust.
     link: /en/getting-started#verifying-trust
   - title: Publish from the template
-    details: Clone, run setup and push master; CI signs and publishes a single GitHub Pages deployment.
+    details: Clone and run setup to configure a signing key, GitHub secret and Pages. After you push master, CI signs and publishes.
     link: /en/publishing
 ---
 
