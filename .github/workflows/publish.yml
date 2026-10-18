@@ -15,7 +15,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Referencing an environment creates it before the first step runs.
+  preflight:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Require configured identity before entering the signing environment
+        run: python3 tools/guard.py --root . --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
+
   publish:
+    needs: [preflight]
     if: github.ref == 'refs/heads/master'
     runs-on: xcode-27
     env:
@@ -32,6 +44,12 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install locked authoring compiler
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Require configured repository, master and public fingerprint
         run: python3 tools/guard.py --root . --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
       - name: Run all checks without the official key

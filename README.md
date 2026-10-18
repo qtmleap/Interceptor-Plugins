@@ -2,7 +2,7 @@
 
 [日本語](README.ja.md)
 
-Official examples and a repository template for Interceptor's JavaScript preview feature. Edit ordinary `.js` files and manifests, test them with the app's own QuickJS engine, and publish signed v1 packages over HTTPS.
+Official examples and a repository template for Interceptor's JavaScript preview feature. Author `.ts` files and manifests, compile readable JavaScript, test it with the app's own QuickJS engine, and publish signed v1 packages over HTTPS.
 
 ## Add the official repository
 
@@ -29,41 +29,33 @@ This preview runs explicit synthetic input and displays the returned intent. It 
 
 ## Run the checks
 
-The checks use Xcode 27.0 (Swift 6.4), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
+The checks use Xcode 27.0 (Swift 6.4), Node.js (the version in `.node-version`), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
 
 ```sh
-tools/check.sh
+npm ci --ignore-scripts
+npm run check
 ```
 
 The command fetches the pinned public Interceptor source, builds its publisher and QuickJS driver, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
 
-Sources live in `scripts/` and `manifests/`; expected input and output live in `fixtures/`. `build/site/` is generated and ignored. The upstream runtime revision is recorded in `repository-config.json`; no QuickJS or crypto implementation is copied here.
+Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See [TypeScript authoring](docs/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; no QuickJS or crypto implementation is copied here.
 
 ## Make your own repository
 
-1. Select **Use this template**, choose your own repository name, and clone it. The default config belongs to the official feed; change it before signed deployment.
-2. Generate your own signing key outside the checkout and any web directory. Keep a secure backup. Never commit it.
+1. Select **Use this template**, create a **public** repository with default branch **master**, and clone your copy. If cloning directly, set `origin` to your own GitHub repository before setup.
+2. On a compatible Mac with GitHub CLI authenticated as a repository administrator, run:
 
    ```sh
-   tools/bootstrap.sh
-   mkdir -p ~/.config/interceptor
-   swift run --package-path .tools/interceptor/Packages/InterceptorAutomation \
-     interceptor-repository keygen ~/.config/interceptor/my-plugins.key
+   npm ci --ignore-scripts
+   npm run setup
+   npm run check
    ```
 
-   The command prints the public-key fingerprint, not the private key.
+   Setup allocates new repository/plugin IDs, creates your signing key outside Git, stores its environment secret behind a master-only deployment policy, sets Pages to use Actions and enables publishing. It preserves existing protections and refuses unknown keys/secrets or an official checkout. Keep a secure backup of `~/.config/interceptor/repositories/OWNER--NAME/`: it holds your private key and retry checkpoint. Re-running setup resumes the same identity and key. No commit, push or deployment is performed by setup.
+3. Edit `src/NAME.ts`, its manifest and fixtures together. Commit your **public configuration**, TypeScript, manifests and tests, then push `master`. CI compiles, checks real QuickJS outputs, generates package SHA-256 hashes, signs and publishes automatically. No manual signing commands are needed for each release.
+4. Wait for **Publish signed repository** to pass its live verification. Register the printed `https://OWNER.github.io/REPO/repository.json` URL in Interceptor. Setup's URL is a future address until deployment succeeds. Share the public fingerprint through an independently trusted channel; a valid signature alone does not prove publisher identity.
 
-3. Configure your identity, substituting your repository, URL and the fingerprint printed above. This allocates new repository and plugin UUIDs.
-
-   ```sh
-   python3 tools/configure.py --root . \
-     --repository YOUR_NAME/YOUR_REPO --name "My plugins" \
-     --url https://YOUR_NAME.github.io/YOUR_REPO/repository.json \
-     --fingerprint YOUR_64_HEX_FINGERPRINT
-   ```
-
-4. Edit a script and its manifest together, update its version, and add a fixture with literal expected output. Keep the v1 package and action contracts. Run `tools/check.sh`.
-5. Follow [Maintaining and publishing](docs/maintaining.md) to create a master-restricted signing environment, store your own secret, enable Pages, and verify the live URL. Publish the fingerprint through a separate trusted channel.
+The first setup needs GitHub administration permission to configure Pages, the deployment environment and its secret; the workflow's ordinary token does not bootstrap these credentials. Organization restrictions may require a maintainer to adjust settings. Existing repositories can use the [manual setup and recovery instructions](docs/maintaining.md).
 
 An unsigned local feed is supported for development and requires the app's unverified-repository acknowledgment. SHA-256 detects package differences against an index; an unsigned server can replace both. Official deployment fails if its signing key is absent.
 

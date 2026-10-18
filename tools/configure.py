@@ -8,7 +8,7 @@ official repository, and either changes everything or nothing.
 from pathlib import Path
 
 from repository_config import (ToolError, check_fingerprint, check_repository, canonical_url, dump_json,
-                               is_display_name, load_config, load_reserved, load_samples, new_uuid,
+                               is_display_name, load_config, load_reserved, load_manifests, new_uuid,
                                origin_is_official, parse_args, run_main, same_repository, url_is_reserved,
                                validate_config, write_all_or_nothing, OFFICIAL_REPOSITORY)
 
@@ -35,13 +35,13 @@ def main(argv):
         raise ToolError("--fingerprint is a reserved official fingerprint")
 
     config = load_config(root)
-    samples = load_samples(root)
+    samples = load_manifests(root)
 
     taken = {i.upper() for i in reserved["ids"]}
     repository_id = new_uuid(taken)
     taken.add(repository_id)
     files = {}
-    for name, manifest, _ in samples:
+    for name, manifest in samples:
         manifest = dict(manifest, id=new_uuid(taken))
         taken.add(manifest["id"])
         files[root / "manifests" / f"{name}.json"] = dump_json(manifest)

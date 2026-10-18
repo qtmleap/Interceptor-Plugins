@@ -1,0 +1,12 @@
+{
+  "name": "interceptor-plugin-repository",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "python3 tools/build.py --root . --output build/site",
+    "check": "tools/check.sh",
+    "setup": "python3 tools/setup.py --root ."
+  },
+  "devDependencies": { "typescript": "5.8.3" }
+}

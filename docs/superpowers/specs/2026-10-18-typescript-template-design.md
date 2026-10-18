@@ -1,0 +1,13 @@
+# TypeScript authoring and signed template setup
+
+Authors maintain `src/NAME.ts`, manifests and literal fixture expectations. A pinned TypeScript compiler checks each plugin independently against the synchronous Interceptor JSON contract and emits readable global-script JavaScript. There is no runtime module loader, Node, DOM, networking, timer or asynchronous host API. Shared ambient declarations describe optional event data; the app still validates all input and output. This change does not alter the app runtime or v1 wire format.
+
+Packaging always recompiles the TypeScript inputs; generated `build/scripts/` and packages are ignored. Manifest/identity validation is independent of compilation, allowing fresh template configuration. Native QuickJS fixtures compare and execute the exact emitted source. Changed package bytes receive sample version 1.0.1 while official UUIDs and signing fingerprint remain stable.
+
+A local `npm run setup` command uses the maintainer's existing GitHub CLI authentication. It preflights a public GitHub repository with admin access, an origin matching that repository and default branch master. It refuses the official repository. It generates one private key outside the checkout, allocates new repository/plugin UUIDs once, and preserves them through retry. It sets up a master-only github-pages environment before uploading its environment secret, configures Pages to use Actions and enables the publishing workflow. Existing protections and unknown secrets are never silently replaced. A private checkpoint binds retries to the same repository/key/config; interrupted writes are reconciled by reading actual state. It never commits, pushes or dispatches automatically.
+
+Subsequent master pushes run installation, type checking, real QuickJS tests, exact-byte packaging, SHA-256/index signing, Pages deployment and live verification. PR checks never obtain the signing environment. The setup command prints the future registration URL and public fingerprint with an explicit reminder to await successful live verification and publish the fingerprint through a trusted independent channel.
+
+CI uses the existing verified hosted xcode-27 image and pinned actions; dependencies use an exact TypeScript version and npm lockfile. Ordinary clones retain the signed-feed expiration and weekly-renewal constraints.
+
+Verification covers type errors, unsupported host/module/async usage, duplicate helper names across independent plugins, stale generated output, deterministic package bytes, synthetic QuickJS results, template configuration and interrupted setup. API/key tests use temporary fixtures and fakes; no official key or remote configuration is touched.

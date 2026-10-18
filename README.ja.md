@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-InterceptorのJavaScript試行機能で使える公式サンプルと、配布リポジトリのテンプレートです。通常の `.js` とmanifestを編集し、アプリと同じQuickJSでテストして、署名付きのv1パッケージをHTTPSで配布できます。
+InterceptorのJavaScript試行機能で使える公式サンプルと、配布リポジトリのテンプレートです。TypeScriptの `.ts` とmanifestを編集し、生成したJavaScriptをアプリと同じQuickJSでテストして、署名付きのv1パッケージをHTTPSで配布できます。
 
 ## 公式リポジトリを追加する
 
@@ -29,41 +29,33 @@ https://qtmleap.github.io/Interceptor-Plugins/repository.json
 
 ## ローカルでテストする
 
-検証にはXcode 27.0（Swift 6.4）が使えるMac、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
+検証にはXcode 27.0（Swift 6.4）が使えるMac、Node.js（`.node-version` のバージョン）、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
 
 ```sh
-tools/check.sh
+npm ci --ignore-scripts
+npm run check
 ```
 
 固定した公開Interceptorソースを取得し、既存publisherとQuickJS検証ツールをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改変検知を確認します。公式の秘密鍵は使わず、公開処理も行いません。
 
-編集するソースは `scripts/` と `manifests/`、入出力の期待値は `fixtures/` にあります。`build/site/` はGit管理対象外の生成物です。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSや暗号処理はコピーしていません。
+編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。フックの型と実行環境の制約は[TypeScriptの書き方](docs/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSや暗号処理はコピーしていません。
 
 ## 自分の配布リポジトリを作る
 
-1. **Use this template**から自分の名前のリポジトリを作り、cloneします。初期設定は公式配布先のものなので、署名配布する前に変更します。
-2. checkoutとWeb公開ディレクトリの外に、自分用の鍵を生成します。安全な場所にバックアップし、Gitへ含めないでください。
+1. **Use this template**から自分の公開リポジトリを作り、既定ブランチを **master** にしてcloneします。直接cloneした場合は、先に `origin` を自分のGitHubリポジトリへ変更してください。
+2. 対応するMacでGitHub CLIに管理者権限のあるアカウントでログインし、実行します。
 
    ```sh
-   tools/bootstrap.sh
-   mkdir -p ~/.config/interceptor
-   swift run --package-path .tools/interceptor/Packages/InterceptorAutomation \
-     interceptor-repository keygen ~/.config/interceptor/my-plugins.key
+   npm ci --ignore-scripts
+   npm run setup
+   npm run check
    ```
 
-   表示されるのは公開鍵の指紋です。秘密鍵そのものは表示しません。
+   セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のenvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
+3. `src/NAME.ts`、manifest、期待値を編集し、公開用の設定・TypeScript・manifest・テストをcommitしてmasterへpushします。CIが型チェック、変換、実際のQuickJSでの検証、SHA-256の生成、署名、配布を行います。更新ごとの手動署名は不要です。
+4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵の指紋は、信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
 
-3. 名前、配布URL、上で表示された指紋を自分用に設定します。リポジトリとサンプルのUUIDも新しく割り当てます。
-
-   ```sh
-   python3 tools/configure.py --root . \
-     --repository YOUR_NAME/YOUR_REPO --name "My plugins" \
-     --url https://YOUR_NAME.github.io/YOUR_REPO/repository.json \
-     --fingerprint YOUR_64_HEX_FINGERPRINT
-   ```
-
-4. スクリプトとmanifestを編集し、バージョンと期待値を更新して `tools/check.sh` を実行します。v1パッケージとアクションの形式を維持してください。
-5. [管理・公開手順](docs/maintaining.md)に従ってmaster専用の署名environment、自分のSecret、Pagesを設定し、公開URLを検証します。指紋は別の信頼できる経路でも案内してください。
+初回はPages・environment・Secretを設定するためのGitHub管理権限が必要です。通常のCIトークンだけでは初回の認証設定は行えません。組織の制限がある場合は管理者による設定が必要です。既存リポジトリの設定や復旧は[管理・公開手順](docs/maintaining.md)を参照してください。
 
 開発用の未署名出力も利用できます。アプリでは未認証リポジトリの確認が必要です。SHA-256は一覧とパッケージの不一致を検知しますが、未署名サーバーでは両方を書き換えられます。公式配布では鍵がない場合に失敗し、未署名へ切り替えません。
 

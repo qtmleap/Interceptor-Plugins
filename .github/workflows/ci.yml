@@ -21,7 +21,7 @@ jobs:
   validate:
     if: ${{ !cancelled() && (true) }}
     needs: ["ci-change-scope"]
-    runs-on: ${{ fromJSON((needs['ci-change-scope'].result == 'success' && needs['ci-change-scope'].outputs.docs_only == 'true') && '["self-hosted","ubuntu-latest"]' || '"xcode-27"') }}
+    runs-on: ${{ fromJSON((needs['ci-change-scope'].result == 'success' && needs['ci-change-scope'].outputs.docs_only == 'true') && '"ubuntu-latest"' || '"xcode-27"') }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_27.0.0.app/Contents/Developer
     timeout-minutes: 20
@@ -30,6 +30,14 @@ jobs:
         if: ${{ (needs['ci-change-scope'].result != 'success' || needs['ci-change-scope'].outputs.docs_only != 'true') }}
         with:
           persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        if: ${{ (needs['ci-change-scope'].result != 'success' || needs['ci-change-scope'].outputs.docs_only != 'true') }}
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - name: Install locked authoring compiler
+        if: ${{ (needs['ci-change-scope'].result != 'success' || needs['ci-change-scope'].outputs.docs_only != 'true') }}
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Test packages, real QuickJS outputs and integrity failures
         if: ${{ (needs['ci-change-scope'].result != 'success' || needs['ci-change-scope'].outputs.docs_only != 'true') }}
         run: tools/check.sh

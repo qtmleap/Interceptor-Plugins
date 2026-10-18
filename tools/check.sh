@@ -2,6 +2,7 @@
 set -euo pipefail
 TASK_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$TASK_ROOT"
+test -d node_modules/typescript || { echo 'Run npm ci before tools/check.sh' >&2; exit 1; }
 tools/bootstrap.sh
 TASK_TEMP=$(mktemp -d /tmp/interceptor-sample-check.XXXXXX)
 trap 'rm -rf -- "$TASK_TEMP"' EXIT
@@ -30,7 +31,8 @@ python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERI
 # A known wrong event shape must fail the expected-output checks, not silently yield undefined text.
 cp -R "$TASK_TEMP/repro" "$TASK_TEMP/wrong-shape"
 mkdir -p "$TASK_TEMP/wrong-root"
-cp -R scripts manifests fixtures "$TASK_TEMP/wrong-root/"
+cp -R manifests fixtures "$TASK_TEMP/wrong-root/"
+cp -R build/scripts "$TASK_TEMP/wrong-root/scripts"
 cp repository-config.json "$TASK_TEMP/wrong-root/"
 python3 - "$TASK_TEMP/wrong-shape/plugins/request-summary.json" "$TASK_TEMP/wrong-root/scripts/request-summary.js" <<'PY'
 import json, sys

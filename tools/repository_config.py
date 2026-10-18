@@ -6,6 +6,7 @@ malformed values are errors. No network access, no keys.
 import json
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -391,31 +392,77 @@ def _list_dir(directory, suffix, kind):
     return names
 
 
-def load_samples(root):
-    """Validated [(name, manifest, source)] for every scripts/NAME.js + manifests/NAME.json pair."""
+def load_manifests(root):
+    """Validate identity and authoring pairs without Node or generated JavaScript."""
     root = Path(root)
-    scripts = _list_dir(root / "scripts", ".js", "scripts")
+    authored = (root / "src").exists() or (root / "src").is_symlink()
+    directory, suffix = ("src", ".ts") if authored else ("scripts", ".js")
+    scripts = _list_dir(root / directory, suffix, directory)
     manifests = _list_dir(root / "manifests", ".json", "manifests")
     if scripts.keys() != manifests.keys():
         missing = sorted(set(scripts) ^ set(manifests))
-        raise ToolError("every sample needs both scripts/NAME.js and manifests/NAME.json; unpaired: " + ", ".join(missing))
+        raise ToolError(f"every sample needs both {directory}/NAME{suffix} and manifests/NAME.json; unpaired: " + ", ".join(missing))
     if not scripts:
         raise ToolError("no samples found")
-    samples, ids = [], {}
+    manifests_out, ids = [], {}
     for name in sorted(scripts):
         manifest = load_json(manifests[name], f"manifests/{name}.json")
         validate_manifest(manifest, f"manifests/{name}.json")
-        raw = read_regular(scripts[name], MAX_SOURCE_BYTES)
+        authored_bytes = read_regular(scripts[name], MAX_SOURCE_BYTES)
+        try:
+            text = authored_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            raise ToolError(f"{directory}/{name}{suffix}: not valid UTF-8")
+        if "\x00" in text:
+            raise ToolError(f"{directory}/{name}{suffix}: contains NUL")
+        identifier = manifest["id"].upper()
+        if identifier in ids:
+            raise ToolError(f"duplicate plugin id {identifier} in {name} and {ids[identifier]}")
+        ids[identifier] = name
+        manifests_out.append((name, manifest))
+    return manifests_out
+
+
+def load_samples(root):
+    """Always compile canonical TS when present; legacy JS fixtures remain supported."""
+    root = Path(root)
+    manifests = load_manifests(root)
+    authored = (root / "src").exists()
+    scripts_dir = root / "scripts"
+    if authored:
+        # A fresh compile is mandatory: never trust a generated file or an mtime/cache stamp.
+        result = subprocess.run(["node", str(root / "tools/compile.mjs"), str(root)],
+                                capture_output=True, text=True)
+        if result.returncode:
+            raise ToolError("TypeScript compilation failed; run npm ci first if dependencies are missing:\n" + result.stderr)
+        emitted = parse_json_object(result.stdout.encode("utf-8"), "compiler output")
+        if set(emitted) != {name for name, _ in manifests}:
+            raise ToolError("compiler outputs do not match manifests")
+        scripts_dir = root / "build/scripts"
+        if (root / "build").is_symlink() or scripts_dir.is_symlink():
+            raise ToolError("generated source directory must not be a symlink")
+        scripts_dir.parent.mkdir(exist_ok=True)
+        temporary = scripts_dir.parent / (".scripts." + uuid.uuid4().hex)
+        try:
+            temporary.mkdir()
+            for name, source in emitted.items():
+                if not isinstance(source, str):
+                    raise ToolError("compiler output must be text")
+                (temporary / (name + ".js")).write_text(source, encoding="utf-8", newline="\n")
+            if scripts_dir.exists():
+                shutil.rmtree(scripts_dir)
+            os.replace(temporary, scripts_dir)
+        finally:
+            shutil.rmtree(temporary, ignore_errors=True)
+    samples = []
+    for name, manifest in manifests:
+        raw = read_regular(scripts_dir / f"{name}.js", MAX_SOURCE_BYTES)
         try:
             source = raw.decode("utf-8")
         except UnicodeDecodeError:
             raise ToolError(f"scripts/{name}.js: not valid UTF-8")
         if "\x00" in source:
             raise ToolError(f"scripts/{name}.js: contains NUL")
-        identifier = manifest["id"].upper()
-        if identifier in ids:
-            raise ToolError(f"duplicate plugin id {identifier} in {name} and {ids[identifier]}")
-        ids[identifier] = name
         samples.append((name, manifest, source))
     return samples
 

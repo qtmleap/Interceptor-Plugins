@@ -17,7 +17,9 @@ def checked_output(root, output):
         raise ToolError("output must not be a symlink")
     output = Path(os.path.realpath(output))
     root = Path(os.path.realpath(root))
-    sources = [root] + [root / d for d in ("scripts", "manifests", "fixtures", "tools")]
+    sources = [root] + [root / d for d in ("src", "types", "scripts", "manifests", "fixtures", "tools", "node_modules")]
+    if output == root / "build/scripts" or root / "build/scripts" in output.parents:
+        raise ToolError("output must not overlap generated source")
     if output == root or root in output.parents and any(output == s or s in output.parents for s in sources[1:]):
         raise ToolError("output must not be inside the editable sources")
     if output in root.parents:

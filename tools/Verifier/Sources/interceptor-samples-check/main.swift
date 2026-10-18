@@ -127,8 +127,9 @@ func runSamples(root: String, directory: String) async throws {
         do { package = try PluginPackage.validate(try readRegular(directory + "/plugins/\(name).json", limit: Limits.package)) }
         catch let error as Fail { throw error }
         catch { throw Fail(message: "plugins/\(name).json: invalid package (\(error))") }
-        let script = try readRegular(root + "/scripts/\(name).js", limit: Limits.source)
-        guard package.source == String(decoding: script, as: UTF8.self) else { throw Fail(message: "plugins/\(name).json: source differs from scripts/\(name).js") }
+        let scriptDirectory = FileManager.default.fileExists(atPath: root + "/src") ? "build/scripts" : "scripts"
+        let script = try readRegular(root + "/\(scriptDirectory)/\(name).js", limit: Limits.source)
+        guard package.source == String(decoding: script, as: UTF8.self) else { throw Fail(message: "plugins/\(name).json: source differs from \(scriptDirectory)/\(name).js") }
         packages[name] = package
     }
     guard Set(packages.values.map(\.manifest.id)) == config.pluginIDs else { throw Fail(message: "packages do not match manifests/") }
