@@ -18,7 +18,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="interceptor-template-") as directory:
         root = Path(directory)
         ignore = shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc")
-        for name in (".github", ".devcontainer", "tools", "tests", "src", "types", "manifests", "fixtures"):
+        for name in (".github", ".devcontainer", "tools", "tests", "src", "types", "manifests", "fixtures", "website"):
             shutil.copytree(args.root / name, root / name, ignore=ignore)
         shutil.copy(args.root / "repository-config.json", root / "repository-config.json")
         for name in ("package.json", "bun.lock", ".bun-version"):
