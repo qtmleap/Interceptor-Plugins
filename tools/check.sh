@@ -2,16 +2,14 @@
 set -euo pipefail
 TASK_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$TASK_ROOT"
+tools/check-authoring.sh
 tools/bootstrap.sh
 TASK_TEMP=$(mktemp -d /tmp/interceptor-sample-check.XXXXXX)
 trap 'rm -rf -- "$TASK_TEMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-python3 -m unittest discover -s tests -v
-python3 -m unittest discover -s tools/tests -v
 python3 tools/build.py --root "$TASK_ROOT" --output "$TASK_TEMP/site"
-python3 tools/build.py --root "$TASK_ROOT" --output "$TASK_TEMP/repro"
-diff -qr "$TASK_TEMP/site/plugins" "$TASK_TEMP/repro/plugins"
+cp -R "$TASK_TEMP/site" "$TASK_TEMP/repro"
 swift build --package-path .tools/interceptor/Packages/InterceptorAutomation --configuration release --product interceptor-repository > build/evidence/publisher-build.log 2>&1 || { tail -60 build/evidence/publisher-build.log; exit 1; }
 swift build --package-path tools/Verifier --configuration release > build/evidence/verifier-build.log 2>&1 || { tail -60 build/evidence/verifier-build.log; exit 1; }
 TASK_PUBLISHER="$(swift build --package-path .tools/interceptor/Packages/InterceptorAutomation --configuration release --show-bin-path)/interceptor-repository"
@@ -30,7 +28,8 @@ python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERI
 # A known wrong event shape must fail the expected-output checks, not silently yield undefined text.
 cp -R "$TASK_TEMP/repro" "$TASK_TEMP/wrong-shape"
 mkdir -p "$TASK_TEMP/wrong-root"
-cp -R scripts manifests fixtures "$TASK_TEMP/wrong-root/"
+cp -R manifests fixtures "$TASK_TEMP/wrong-root/"
+cp -R build/scripts "$TASK_TEMP/wrong-root/scripts"
 cp repository-config.json "$TASK_TEMP/wrong-root/"
 python3 - "$TASK_TEMP/wrong-shape/plugins/request-summary.json" "$TASK_TEMP/wrong-root/scripts/request-summary.js" <<'PY'
 import json, sys

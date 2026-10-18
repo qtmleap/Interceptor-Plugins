@@ -15,7 +15,26 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Referencing an environment creates it before the first step runs.
+  preflight:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Require configured identity before entering the signing environment
+        run: python3 tools/guard.py --root . --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
+      - name: Require existing master-only deployment protections
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/check_environment.py --repository "$GITHUB_REPOSITORY"
+
   publish:
+    needs: [preflight]
     if: github.ref == 'refs/heads/master'
     runs-on: xcode-27
     env:
@@ -32,6 +51,11 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+      - name: Install locked authoring compiler
+        run: bun install --frozen-lockfile --ignore-scripts
       - name: Require configured repository, master and public fingerprint
         run: python3 tools/guard.py --root . --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF"
       - name: Run all checks without the official key

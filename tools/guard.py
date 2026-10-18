@@ -8,7 +8,7 @@ tools/reserved.json) are used by the official repository and nobody else.
 from pathlib import Path
 
 from repository_config import (OFFICIAL_REPOSITORY, ToolError, check_repository, load_config, load_reserved,
-                               load_samples, parse_args, run_main, same_repository, url_is_reserved)
+                               load_manifests, parse_args, run_main, same_repository, url_is_reserved)
 
 
 def main(argv):
@@ -21,7 +21,7 @@ def main(argv):
         raise ToolError("signed deployment requires refs/heads/master")
 
     config, reserved = load_config(root), load_reserved(root)
-    plugin_ids = [manifest["id"].upper() for _, manifest, _ in load_samples(root)]
+    plugin_ids = [manifest["id"].upper() for _, manifest in load_manifests(root)]
     if not same_repository(config["githubRepository"], repository):
         raise ToolError(f"configured repository {config['githubRepository']} does not match {repository}")
     fingerprint = config["publicKeyFingerprint"]

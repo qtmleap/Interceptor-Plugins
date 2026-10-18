@@ -8,3 +8,6 @@ __pycache__/
 *.pem
 tools/Verifier/.build/
 tools/Verifier/.swiftpm/
+node_modules/
+.codex/
+.claude/
