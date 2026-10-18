@@ -21,7 +21,7 @@ Before adding it, preview the repository name and script count. Signed repositor
 
 ## Verifying trust
 
-A fingerprint is a 64-character value identifying the publisher's signing key. Compare the **entire value** with one obtained through a separate channel you trust. If it differs, or no valid value appears below, you cannot confirm the source and should not trust it.
+A fingerprint is a 64-character value identifying the publisher's signing key. Follow these steps to check whether the key shown in Interceptor belongs to the publisher you trust.
 
 The SHA-256 fingerprint of this repository's Ed25519 public key:
 
@@ -29,10 +29,15 @@ The SHA-256 fingerprint of this repository's Ed25519 public key:
 %%FINGERPRINT%%
 ```
 
+1. Find the fingerprint in Interceptor's Add Repository preview.
+2. Obtain a comparison fingerprint through a separate channel, such as an established contact for the publisher you already trust, independent of this site and feed.
+3. Check that **all 64 characters match**. If you cannot obtain a comparison value, the values differ, or no valid fingerprint is shown, you cannot confirm the trusted publisher. Do not trust or add the repository.
+
+The value on this page alone does not complete verification. This site and feed share GitHub administration and are not independent channels. This page does not provide a separate verification contact.
+
 - The **package SHA-256** detects a mismatch between the index and a package. An unsigned server can replace both.
 - The **public-key fingerprint** is a SHA-256 value identifying the signing key. A valid signature from a key you see for the first time does not prove who published it.
 - **Ed25519 signatures** authenticate the index and the package hashes it lists against the signing key.
-- This site and the feed share GitHub administration, so this page alone is not an independent trust channel. Compare the **full fingerprint** through a channel you already trust before pinning it.
 
 ## Import and test
 
@@ -59,4 +64,4 @@ This is a synchronous v1 **synthetic preview**. It runs explicit input and displ
 - It does not run in the background.
 - Imports are stored disabled. The samples request no body, header or query values.
 
-If the result matches the table, importing and testing the sample is complete. See [Examples](examples.md) to try another sample. To create your own plugin, continue with [TypeScript authoring](authoring.md).
+If the result matches the table, you have checked the sample's result with test data. This is the extent of the current preview; there is no step to enable automatic execution on live traffic. See [Examples](examples.md) to try another sample. To create your own plugin, continue with [TypeScript authoring](authoring.md).
