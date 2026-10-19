@@ -4,6 +4,7 @@ Everything here is strict and fails closed: duplicate JSON keys, symlinks, unkno
 malformed values are errors. No network access, no keys.
 """
 import json
+import math
 import os
 import re
 import shutil
@@ -80,16 +81,49 @@ def parse_args(argv, options, flags=()):
 # ---------------------------------------------------------------- strict JSON / files
 
 def _no_duplicates(pairs):
-    out = {}
+    out, seen = {}, set()
     for key, value in pairs:
-        if key in out:
-            raise ToolError(f"duplicate JSON key: {key}")
+        normalized = unicodedata.normalize("NFC", key)
+        if normalized in seen:
+            raise ToolError("duplicate JSON key")
+        seen.add(normalized)
         out[key] = value
     return out
 
 
 def _reject_constant(name):
     raise ToolError(f"invalid JSON number: {name}")
+
+
+def _safe_integer(text):
+    value = int(text)
+    if not -9_007_199_254_740_991 <= value <= 9_007_199_254_740_991:
+        raise ToolError("JSON integer out of range")
+    return value
+
+
+def _finite_number(text):
+    value = float(text)
+    if not math.isfinite(value):
+        raise ToolError("invalid JSON number")
+    return value
+
+
+def _json_shape(value, maximum=64):
+    stack = [(value, 1)]
+    while stack:
+        item, depth = stack.pop()
+        if isinstance(item, str):
+            if any(0xD800 <= ord(char) <= 0xDFFF for char in item):
+                raise ToolError("invalid JSON surrogate")
+        elif isinstance(item, (dict, list)):
+            if depth > maximum:
+                raise ToolError("JSON nesting limit exceeded")
+            if isinstance(item, dict):
+                stack.extend((key, depth) for key in item)
+                stack.extend((child, depth + 1) for child in item.values())
+            else:
+                stack.extend((child, depth + 1) for child in item)
 
 
 def read_regular(path, limit=MAX_FILE_BYTES):
@@ -116,10 +150,12 @@ def read_regular(path, limit=MAX_FILE_BYTES):
 def parse_json_object(data, what):
     try:
         text = data.decode("utf-8")
-        value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant)
+        value = json.loads(text, object_pairs_hook=_no_duplicates, parse_constant=_reject_constant,
+                           parse_int=_safe_integer, parse_float=_finite_number)
+        _json_shape(value)
     except ToolError as error:
         raise ToolError(f"{what}: {error}")
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         raise ToolError(f"{what}: invalid JSON")
     if not isinstance(value, dict):
         raise ToolError(f"{what}: expected a JSON object")
@@ -153,7 +189,7 @@ def is_display_name(text, limit=80):
 
 
 def check_uuid(value, what):
-    if not isinstance(value, str) or not UUID_RE.match(value):
+    if not isinstance(value, str) or not UUID_RE.fullmatch(value):
         raise ToolError(f"{what}: not a UUID")
     return value.upper()
 
@@ -162,7 +198,7 @@ def check_repository(value, what="repository"):
     if not isinstance(value, str) or value.count("/") != 1:
         raise ToolError(f"{what}: expected OWNER/NAME")
     owner, name = value.split("/")
-    if not OWNER_RE.match(owner) or not REPO_NAME_RE.match(name) or name in (".", "..") or name.endswith(".git"):
+    if not OWNER_RE.fullmatch(owner) or not REPO_NAME_RE.fullmatch(name) or name in (".", "..") or name.endswith(".git"):
         raise ToolError(f"{what}: invalid OWNER/NAME")
     return value
 
@@ -172,7 +208,7 @@ def same_repository(a, b):
 
 
 def check_fingerprint(value, what="fingerprint"):
-    if not isinstance(value, str) or not FINGERPRINT_RE.match(value):
+    if not isinstance(value, str) or not FINGERPRINT_RE.fullmatch(value):
         raise ToolError(f"{what}: expected 64 lowercase hex characters")
     return value
 
@@ -201,7 +237,7 @@ def canonical_url(text):
     host = host.lower()
     labels = host.split(".")
     if (len(host) > 253 or (len(labels) < 2 and host != "localhost") or host.endswith(".")
-            or any(not _HOST_LABEL.match(l) or l[0] == "-" or l[-1] == "-" for l in labels)
+            or any(not _HOST_LABEL.fullmatch(l) or l[0] == "-" or l[-1] == "-" for l in labels)
             or not "a" <= labels[-1][0] <= "z"):
         raise ToolError("url: invalid host")
     if path in ("", "/"):
@@ -210,7 +246,7 @@ def canonical_url(text):
         segments = path[1:].split("/")
         if path.endswith("/"):
             segments[-1] = "repository.json"
-    if any(not _SEGMENT.match(s) or s in (".", "..") for s in segments):
+    if any(not _SEGMENT.fullmatch(s) or s in (".", "..") for s in segments):
         raise ToolError("url: invalid path")
     result = "https://" + host + (f":{port}" if port else "") + "/" + "/".join(segments)
     if len(result) > 1024:
@@ -248,7 +284,7 @@ def validate_config(config):
         raise ToolError("repository-config.json: repositoryURL is not in canonical form")
     if config["publicKeyFingerprint"] is not None:
         check_fingerprint(config["publicKeyFingerprint"], "repository-config.json publicKeyFingerprint")
-    if not isinstance(config["upstreamRevision"], str) or not REVISION_RE.match(config["upstreamRevision"]):
+    if not isinstance(config["upstreamRevision"], str) or not REVISION_RE.fullmatch(config["upstreamRevision"]):
         raise ToolError("repository-config.json: upstreamRevision must be a 40-hex commit SHA")
     return config
 
@@ -274,8 +310,8 @@ def load_reserved(root):
 # ---------------------------------------------------------------- samples
 
 _HOST_MATCH_LABEL = re.compile(r"^[a-z0-9-]{1,63}$")
-_SEMVER = re.compile(r"^(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})\.(0|[1-9]\d{0,9})"
-                     r"(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?"
+_SEMVER = re.compile(r"^(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})\.(0|[1-9][0-9]{0,9})"
+                     r"(?:-((?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*))*))?"
                      r"(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$")
 _PHASES = ("request.headers", "request.completed", "response.headers", "response.completed")
 _METADATA = ("method", "host", "status", "path")
@@ -294,7 +330,7 @@ def _strings(value, what, minimum=0, maximum=32):
 
 def _host_ok(host):
     labels = host.split(".")
-    return (0 < len(host) <= 253 and all(_HOST_MATCH_LABEL.match(l) and l[0] != "-" and l[-1] != "-" for l in labels))
+    return (0 < len(host) <= 253 and all(_HOST_MATCH_LABEL.fullmatch(l) and l[0] != "-" and l[-1] != "-" for l in labels))
 
 
 def validate_manifest(m, what):
@@ -306,7 +342,7 @@ def validate_manifest(m, what):
     check_uuid(m["id"], f"{what} id")
     if not is_display_name(m["name"]):
         _fail(what, "invalid name")
-    if not isinstance(m["version"], str) or len(m["version"]) > 64 or not _SEMVER.match(m["version"]):
+    if not isinstance(m["version"], str) or len(m["version"]) > 64 or not _SEMVER.fullmatch(m["version"]):
         _fail(what, "version must be SemVer")
     subs = m["subscriptions"]
     if not isinstance(subs, list) or not 1 <= len(subs) <= 8:
@@ -346,7 +382,7 @@ def validate_manifest(m, what):
     if len(set(metadata)) != len(metadata) or not set(metadata) <= set(_METADATA):
         _fail(what, "invalid metadata")
     headers = _strings(read["headers"], what + " headers", 0, 32)
-    if len({h.lower() for h in headers}) != len(headers) or not all(_HEADER_NAME.match(h) for h in headers):
+    if len({h.lower() for h in headers}) != len(headers) or not all(_HEADER_NAME.fullmatch(h) for h in headers):
         _fail(what, "invalid headers")
     query = _strings(read["queryKeys"], what + " queryKeys", 0, 32)
     if len(set(query)) != len(query) or not all(0 < len(k.encode()) <= 128 and not any(ord(c) < 0x20 or ord(c) == 0x7F for c in k) for k in query):
@@ -369,8 +405,9 @@ def validate_manifest(m, what):
     bindings = _strings(m["endpointBindings"], what + " endpointBindings", 0, 4)
     if len(set(bindings)) != len(bindings) or not all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", b) for b in bindings):
         _fail(what, "invalid endpointBindings")
-    if not isinstance(m["settings"], dict) or len(json.dumps(m["settings"]).encode()) > 8192:
+    if not isinstance(m["settings"], dict) or len(json.dumps(m["settings"], ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()) > 8192:
         _fail(what, "invalid settings")
+    _json_shape(m["settings"], 16)
 
 
 def _list_dir(directory, suffix, kind):
@@ -386,7 +423,7 @@ def _list_dir(directory, suffix, kind):
         if not entry.endswith(suffix):
             raise ToolError(f"unexpected file in {kind}/: {entry}")
         stem = entry[: -len(suffix)]
-        if not SAMPLE_NAME_RE.match(stem) or len(stem) > 64:
+        if not SAMPLE_NAME_RE.fullmatch(stem) or len(stem) > 64:
             raise ToolError(f"invalid sample name in {kind}/: {entry}")
         names[stem] = Path(directory) / entry
     return names

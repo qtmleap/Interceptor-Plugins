@@ -1,0 +1,15 @@
+[package]
+name = "interceptor-simulator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.74"
+build = "build.rs"
+publish = false
+description = "Standalone plugin hook emulator embedding the pinned Interceptor QuickJS bridge"
+
+[[bin]]
+name = "interceptor-simulator"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = 2

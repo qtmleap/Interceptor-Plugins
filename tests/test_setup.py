@@ -348,15 +348,11 @@ class SetupTests(Case):
                 self.assertEqual(self.manifest_ids(root), original_ids)
                 self.assertEqual(keys.created, 1)
 
-    def test_setup_cli_refuses_non_macos_before_any_side_effect(self):
+    def test_setup_cli_runs_on_linux(self):
         with mock.patch.object(setup_tool.sys, 'platform', 'linux'), \
              mock.patch.object(setup_tool, 'setup_repository') as initialize, \
-             mock.patch.object(setup_tool, 'inspect_origin') as origin, \
-             mock.patch.object(setup_tool, 'GitHub') as github, \
-             mock.patch.object(setup_tool, 'NativeKeyTool') as keys:
-            with self.assertRaisesRegex(ToolError, 'macOS'):
-                setup_tool.main(['--root', str(self.tmp / 'absent')])
-            initialize.assert_not_called()
-            origin.assert_not_called()
-            github.assert_not_called()
-            keys.assert_not_called()
+             mock.patch.object(setup_tool, 'GitHub'), \
+             mock.patch.object(setup_tool, 'NativeKeyTool'):
+            initialize.return_value = {'url': 'https://alice.github.io/plugins/repository.json', 'fingerprint': 'a' * 64}
+            setup_tool.main(['--root', str(self.tmp / 'absent')])
+            initialize.assert_called_once()

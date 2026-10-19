@@ -2,7 +2,7 @@
 
 The configuration is adapted from [qtmleap/devcontainers](https://github.com/qtmleap/devcontainers/tree/7d1931f8d33e49dee3775b1d893297ced0c639bf), revision `7d1931f8d33e49dee3775b1d893297ced0c639bf`: `examples/hono-node/.devcontainer/` and the shared editor configuration. The upstream MIT notice is retained in [licenses/devcontainers-LICENSE](licenses/devcontainers-LICENSE).
 
-Open this checkout with VS Code **Dev Containers: Reopen in Container**. Docker must be running. The Ubuntu 24.04 container supplies Bun 1.3.6, Python 3, OpenSSL, GitHub CLI and the upstream `ghcr.io/tkgstrator/commitguard:1` feature. Base/Bun images are pinned by digest; feature resolution is recorded in the Dev Container lockfile. The workspace is mounted at `/home/vscode/app`, with a separate Linux `node_modules` volume.
+Open this checkout with VS Code **Dev Containers: Reopen in Container**. Docker must be running. The Ubuntu 24.04 container supplies Bun 1.3.6, Python 3, OpenSSL, GitHub CLI, Rust, a C compiler and the upstream `ghcr.io/tkgstrator/commitguard:1` feature. Base/Bun images are pinned by digest; feature resolution is recorded in the Dev Container lockfile. The workspace is mounted at `/home/vscode/app`, with a separate Linux `node_modules` volume.
 
 The commit guard requires a verified human GitHub login and keeps Git blocked until activation succeeds. This configuration adds no host credential or signing-key mounts. VS Code Dev Containers can separately copy Git configuration, forward its host credential helper and forward an SSH agent, according to local client settings. This project does not change those settings: developers who require credential isolation should review `dev.containers.copyGitConfig`, `dev.containers.gitCredentialHelperConfigLocation` and SSH-agent forwarding before reopening. CLI-based verification does not establish the VS Code client's forwarding behavior. If initial creation stops at authentication, open a terminal in the existing container (use **Dev Containers: Attach to Running Container** if needed) and complete recovery there:
 
@@ -20,12 +20,12 @@ As in the upstream template, activation installs its managed policy/skill files 
 After creation, dependencies install with `bun install --frozen-lockfile --ignore-scripts`. For daily development:
 
 ```sh
-bun run check:authoring
+bun run check
 bun run build
 ```
 
 The portable check covers Python tool tests, actual HTTPS fixtures, TypeScript compilation and deterministic packages. It requires no GitHub credentials or signing key. The build output directory must be absent or empty; preserve/remove only your previous generated `build/site/` before rebuilding.
 
-Run `bun run check` on a Mac with Xcode 27 / Swift 6.4 for the complete QuickJS, signature and configured-template checks. Those checks remain mandatory in CI before signing/publishing. Linux authoring checks do not replace them. Initial `bun run setup` also runs on the Mac because the pinned publisher uses CryptoKit; it rejects unsupported hosts before changing local or remote state.
+The full `bun run check` works in this Linux container, including the Rust simulator and signed-feed verification. `bun run setup` uses Bun's Ed25519 primitives and can initialize an independent feed here after explicit GitHub CLI authentication. No Xcode, Swift or Mac is required. Authentication and signing keys are not automatically copied from the host.
 
 Project adaptations keep the upstream Compose/workspace/dependency-volume layout and guarded Git, but pin Bun directly in the Dockerfile rather than using an unversioned installer. The Hono app, Biome/submodule, optional agent CLIs, host configuration/credential mounts, Docker socket, forwarded ports, branch pruning and automatic authentication are omitted. Shared VS Code defaults are retained with built-in TypeScript formatting and the workspace compiler, without adding a formatter dependency. No upstream development configuration is synced automatically.

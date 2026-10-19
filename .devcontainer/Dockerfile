@@ -3,7 +3,7 @@ FROM oven/bun:1.3.6@sha256:f20d9cf365ab35529384f1717687c739c92e6f39157a35a95ef06
 FROM mcr.microsoft.com/devcontainers/base:dev-ubuntu24.04@sha256:2304776586353b17596b4785fc0a4b30c024c9a9c74aa60d4e87253e7e141832
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 openssl ca-certificates \
+    && apt-get install -y --no-install-recommends python3 openssl ca-certificates build-essential cargo rustc \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
 RUN test "$(bun --version)" = '1.3.6'

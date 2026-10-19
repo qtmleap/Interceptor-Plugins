@@ -50,14 +50,7 @@ def main():
             page = Page()
             page.feed(html)
             assert name in "".join(page.text), f"display name was not rendered literally: {file}"
-            locale = "en" if file.startswith("en/") else "ja"
-            expected = {f"/my-plugins/diagrams/plugin-hooks-{locale}-{theme}.svg"
-                        for theme in ("light", "dark")}
-            assert len(page.images) == 2, f"unexpected image count: {file}"
-            assert {image.get("src") for image in page.images} == expected, f"unexpected image: {file}"
-            assert all(image.get("alt") for image in page.images), f"missing diagram description: {file}"
-            assert not any(key.lower().startswith("on") for image in page.images for key in image), \
-                f"display name injected an event handler: {file}"
+            assert not page.images, f"display name injected an image: {file}"
             assert "/my-plugins/" in html
             assert "qtmleap.github.io/Interceptor-Plugins" not in html
         print("Configured documentation template and literal metadata checks passed.")

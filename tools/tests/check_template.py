@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Check an independently configured template with the real tools and native driver."""
+"""Check an independently configured template with the real tools and the runtime driver."""
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -25,7 +26,8 @@ def main():
             shutil.copy(args.root / name, root / name)
 
         def run(*command):
-            subprocess.run([str(value) for value in command], cwd=root, check=True)
+            subprocess.run([str(value) for value in command], cwd=root, check=True,
+                           env=dict(os.environ, INTERCEPTOR_SIMULATOR=str(args.root.resolve() / ".tools/bin/interceptor-simulator")))
 
         run("bun", "install", "--frozen-lockfile", "--ignore-scripts")
         run(sys.executable, "tools/configure.py", "--root", root, "--repository", "sample-owner/my-plugins", "--name", "Template smoke test", "--url", "https://sample-owner.github.io/my-plugins/repository.json", "--fingerprint", "a" * 64)

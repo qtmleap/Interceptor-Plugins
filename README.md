@@ -31,25 +31,34 @@ This preview runs explicit synthetic input and displays the returned intent. It 
 
 ## Development container
 
-The [development container](docs/devcontainer.md) uses `qtmleap/devcontainers` with pinned Bun and Python. Open it with **Dev Containers: Reopen in Container**, then run `bun run check:authoring`. Full native checks and first signing setup run on a Mac.
+The [development container](docs/devcontainer.md) uses `qtmleap/devcontainers` with pinned Bun and Python. Open it with **Dev Containers: Reopen in Container**, then run `bun run check`. Authoring, emulation, signing setup and publishing work on Linux.
 
 ## Run the checks
 
-The checks use Xcode 27.0 (Swift 6.4), Bun (the version in `.bun-version`), Python 3 and Git on a compatible Mac. The reused Swift package keeps its macOS 14 deployment target; older default Swift compilers cannot build the pinned automation library. From this checkout:
+Use Bun (the version in `.bun-version`), Python 3, OpenSSL, Git, Rust 1.74 or later and a C compiler on Linux or macOS. Xcode is not required. From this checkout:
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
 bun run check
 ```
 
-The command fetches the pinned public Interceptor source, builds its publisher and QuickJS driver, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
+The command fetches the pinned public Interceptor source, builds a Rust simulator using its unchanged QuickJS bridge, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
 
-Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See [TypeScript authoring](docs/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; no QuickJS or crypto implementation is copied here.
+Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See [TypeScript authoring](docs/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; QuickJS is fetched at that revision; Bun supplies Ed25519 primitives without a new cryptography dependency.
+
+## Emulate a plugin
+
+```sh
+bun run simulator check build/scripts/request-summary.js
+bun run simulator run build/scripts/request-summary.js onRequest fixtures/request-event.json fixtures/config.json
+```
+
+Run `bun run check` first to generate the JavaScript. `check` parses syntax without executing the script; `run` invokes the hook and prints its action JSON without sending webhooks. The built `.tools/bin/interceptor-simulator` is a standalone binary for its OS and CPU, with normal system-library dependencies.
 
 ## Make your own repository
 
 1. Select **Use this template**, create a **public** repository with default branch **master**, and clone your copy. If cloning directly, set `origin` to your own GitHub repository before setup.
-2. On a compatible Mac with GitHub CLI authenticated as a repository administrator, run:
+2. On Linux or macOS with GitHub CLI authenticated as a repository administrator, run:
 
    ```sh
    bun install --frozen-lockfile --ignore-scripts

@@ -10,14 +10,6 @@ if not isinstance(pin, str) or not re.fullmatch(r'[0-9a-f]{40}', pin):
 print(pin)
 PY
 )
-command -v swift >/dev/null
-python3 - <<'PY'
-import re, subprocess
-result = subprocess.run(['swift', '--version'], capture_output=True, text=True)
-match = re.search(r'\bSwift version (\d+)\.(\d+)', result.stdout + result.stderr, re.I)
-if result.returncode or not match or tuple(map(int, match.groups())) < (6, 4):
-    raise SystemExit('Repository checks require Swift 6.4 or later; select Xcode 27.0.')
-PY
 if [[ -e "$TASK_SOURCE" ]]; then
     [[ ! -L "$TASK_SOURCE" && -d "$TASK_SOURCE/.git" ]] || { echo 'upstream cache is not a Git checkout' >&2; exit 1; }
 else
@@ -56,6 +48,10 @@ PYTHON
 mkdir -p "$TASK_ROOT/build/evidence"
 {
     git -C "$TASK_SOURCE" rev-parse HEAD
-    swift --version
-    xcodebuild -version
+    bun --version
+    python3 --version
+    uname -s
+    cargo --version
+    rustc --version
+    cc --version
 } > "$TASK_ROOT/build/evidence/toolchain.txt"

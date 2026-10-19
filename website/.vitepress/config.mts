@@ -41,13 +41,7 @@ function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
   const prefix = locale === 'root' ? '/' : '/en/'
-  const hooks = [
-    ['onRequest', 'onrequest'], ['onResponse', 'onresponse'],
-    ['Interceptor.attach', 'hook-registration'],
-    ['request.onEnter', 'before-request'], ['request.onLeave', 'after-request'],
-    ['response.onEnter', 'before-response'], ['response.onLeave', 'after-response'],
-    ['rewriteJsonBody', 'rewrite-json-body']
-  ]
+  const hooks = [['onRequest', 'onrequest'], ['onResponse', 'onresponse']]
   const items = pages.map((page) => ({
     text: labels[locale][page], link: `${prefix}${page}`,
     ...(page === 'api' ? { items: hooks.map(([text, anchor]) => ({ text, link: `${prefix}api#${anchor}` })) } : {})
