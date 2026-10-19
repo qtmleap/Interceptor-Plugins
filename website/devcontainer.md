@@ -18,7 +18,7 @@ bun run build
 
 `check` は型チェック、パッケージ生成、QuickJSでの実行、署名と改ざん検出を検証します。テストには一時的な鍵を使うので、GitHubの認証情報や公開用の署名鍵は不要です。出力先の `build/site/` は存在しないか空である必要があります。
 
-新しいリポジトリの署名鍵・GitHub環境・Pagesを設定するときは、コンテナ内で `gh auth login` を済ませてから `bun run setup` を実行します。手順は[公開](publishing.md)を参照してください。
+新しいリポジトリの署名鍵・GitHub Environment・Pagesを設定するときは、コンテナ内で `gh auth login` を済ませてから `bun run setup` を実行します。手順は[公開](publishing.md)を参照してください。
 
 ## 認証で初期設定が止まった場合
 

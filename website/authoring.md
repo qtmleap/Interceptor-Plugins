@@ -86,7 +86,7 @@ Interceptor.attach(search, {
 
 ## テストを書く
 
-`fixtures/cases.json`に、入力と期待する結果を追加します。v2のテストでは`phase`に4つのHook名のいずれかを指定します。
+`fixtures/cases.json`に、入力と期待する結果を追加します。スキーマ2のテストでは`phase`に4つのHook名のいずれかを指定します。
 
 ```json
 {

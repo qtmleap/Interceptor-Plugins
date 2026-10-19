@@ -14,9 +14,9 @@ Interceptorの通信にJavaScriptの処理を追加する公式サンプルと�
 https://qtmleap.github.io/Interceptor-Plugins/repository.json
 ```
 
-追加前のプレビューでリポジトリ名と署名鍵の指紋を確認します。ソースとmanifestは、追加後にスクリプトの詳細画面で確認できます。初めて見る鍵の署名が正しくても、それだけで公開者の本人確認が済むわけではありません。信頼できる別の経路で指紋全体を照合してから、署名鍵を信頼する操作を行ってください。このREADMEとPagesは同じGitHub管理権限の影響を受けるため、このページだけを別経路の確認に使わないでください。
+追加前のプレビューでリポジトリ名と署名鍵のフィンガープリントを確認します。ソースとmanifestは、追加後にスクリプトの詳細画面で確認できます。初めて見る鍵の署名が正しくても、それだけで公開者の本人確認が済むわけではありません。信頼できる別の経路でフィンガープリント全体を照合してから、署名鍵を信頼する操作を行ってください。このREADMEとPagesは同じGitHub管理権限の影響を受けるため、このページだけを別経路の確認に使わないでください。
 
-公式公開鍵の指紋: **b29b13755f2df72858c5d14ea7c1b293fa379b9ad3ea2f86f016dfa0735cd96a**
+公式公開鍵のフィンガープリント: **b29b13755f2df72858c5d14ea7c1b293fa379b9ad3ea2f86f016dfa0735cd96a**
 
 サンプルを選び、ソースと権限を確認して無効状態で読み込みます。詳細画面でHookと入力JSONを選び、合成テストを実行します。合成テストは通信やWebhookを送信せず、JSON本文の変更と返されたアクションを表示します。
 
@@ -43,9 +43,9 @@ bun install --frozen-lockfile --ignore-scripts
 bun run check
 ```
 
-固定した公開Interceptorソースを取得し、共通のQuickJSブリッジを使うRust製シミュレーターをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改変検知を確認します。公式の秘密鍵は使わず、公開処理も行いません。
+固定した公開Interceptorソースを取得し、共通のQuickJSブリッジを使うRust製シミュレーターをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改ざん検出を確認します。公式の秘密鍵は使わず、公開処理も行いません。
 
-編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。フックの型と実行環境の制約は[作成ガイド](website/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSはそのSHAから取得し、Ed25519の署名にはBunの暗号機能を使います。
+編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。Hookの型と実行環境の制約は[作成ガイド](website/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSはそのSHAから取得し、Ed25519の署名にはBunの暗号機能を使います。
 
 ## シミュレーター
 
@@ -67,13 +67,13 @@ bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/
    bun run check
    ```
 
-   セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のenvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
+   セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のGitHub EnvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
 3. `src/NAME.ts`、manifest、期待値を編集し、公開用の設定・TypeScript・manifest・テストをcommitしてmasterへpushします。CIが型チェック、変換、実際のQuickJSでの検証、SHA-256の生成、署名、配布を行います。更新ごとの手動署名は不要です。
-4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵の指紋は信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
+4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵のフィンガープリントは信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
 
-初回はPages・environment・Secretを設定するためのGitHub管理権限が必要です。通常のCIトークンだけでは初回の認証設定は行えません。組織の制限がある場合は管理者による設定が必要です。既存リポジトリの設定や復旧は[管理・公開手順](docs/maintaining.md)を参照してください。
+初回はPages・Environment・Secretを設定するためのGitHub管理権限が必要です。通常のCIトークンだけでは初回の認証設定は行えません。組織の制限がある場合は管理者による設定が必要です。既存リポジトリの設定や復旧は[管理・公開手順](docs/maintaining.md)を参照してください。
 
-開発用の未署名出力も利用できます。アプリでは未認証リポジトリの確認が必要です。SHA-256は一覧とパッケージの不一致を検知しますが、未署名サーバーでは両方を書き換えられます。公式配布では鍵がない場合に失敗し、未署名へ切り替えません。
+開発用の未署名出力も利用できます。アプリに配布元が未確認と表示されるため、内容を確認して了承したうえで追加します。SHA-256は一覧とパッケージの不一致を検知しますが、未署名サーバーでは両方を書き換えられます。公式配布では鍵がない場合に失敗し、未署名へ切り替えません。
 
 ## 運用
 
