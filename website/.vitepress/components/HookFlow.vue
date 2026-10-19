@@ -19,8 +19,8 @@ const copy = {
 <template>
   <figure class="hook-flow">
     <div class="hook-flow-scroll" tabindex="0" :aria-label="copy[props.locale].scroll">
-      <img class="hook-flow-light" :src="withBase(`/diagrams/plugin-hooks-${props.locale}-light.svg`)" :alt="copy[props.locale].alt">
-      <img class="hook-flow-dark" :src="withBase(`/diagrams/plugin-hooks-${props.locale}-dark.svg`)" :alt="copy[props.locale].alt">
+      <img class="hook-flow-light" :src="withBase(`/diagrams/plugin-hooks-${props.locale}-light.svg`)" :alt="copy[props.locale].alt" width="760" height="568">
+      <img class="hook-flow-dark" :src="withBase(`/diagrams/plugin-hooks-${props.locale}-dark.svg`)" :alt="copy[props.locale].alt" width="760" height="568">
     </div>
     <figcaption>{{ copy[props.locale].caption }}</figcaption>
   </figure>
@@ -29,7 +29,7 @@ const copy = {
 <style>
 .hook-flow { margin: 28px 0; }
 .hook-flow-scroll { overflow-x: auto; border: 1px solid var(--vp-c-divider); border-radius: 12px; background: var(--vp-c-bg); }
-.hook-flow-scroll img { display: block; width: 100%; min-width: 660px; max-width: 760px; height: auto; margin: 0 auto; }
+.hook-flow-scroll img { display: block; width: 100%; min-width: 620px; max-width: 760px; height: auto; margin: 0 auto; }
 .hook-flow-scroll .hook-flow-dark { display: none; }
 .dark .hook-flow-scroll .hook-flow-light { display: none; }
 .dark .hook-flow-scroll .hook-flow-dark { display: block; }

@@ -1,35 +1,76 @@
-<?xml version="1.0" encoding="utf-8"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"  preserveAspectRatio="xMinYMin meet" viewBox="0 0 775 1048"><svg class="d2-3238550226 d2-svg" width="775" height="1048" viewBox="-13 27 775 1048"><rect x="-13" y="27" width="775" height="1048" rx="0" fill="transparent" stroke-width="0" /><style type="text/css"><![CDATA[
-.d2-3238550226 .text {
-	font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-}
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="568" viewBox="0 0 760 568" role="img" aria-labelledby="title desc">
+  <title id="title">通信と4つのHookの位置</title>
+  <desc id="desc">リクエストはクライアントからInterceptorを経由してサーバーへ、レスポンスは逆向きに流れます。onEnterでは転送前の内容を変更でき、onLeaveは転送後の後処理です。</desc>
+  <style>
+    text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans JP', sans-serif; }
+    .code { font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace; font-weight: 500; }
+  </style>
+  <defs>
+    <marker id="forward" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#2563eb" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+    <marker id="after" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1 L9 5 L1 9" fill="none" stroke="#68778d" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></marker>
+  </defs>
+  <rect width="760" height="568" rx="16" fill="#ffffff"/>
+  <rect x="216" y="24" width="328" height="490" rx="18" fill="#f6f8fb" stroke="#dce2ea"/>
+  <text x="380" y="64" text-anchor="middle" font-size="23" font-weight="650" fill="#202b3c">Interceptor</text>
+  <text x="380" y="87" text-anchor="middle" font-size="13" fill="#64748b">条件が一致した通信のHookを実行</text>
+  <path d="M240 108 H520" stroke="#dce2ea"/>
+  <text x="102" y="61" text-anchor="middle" font-size="18" font-weight="600" fill="#202b3c">クライアント</text>
+  <text x="102" y="84" text-anchor="middle" font-size="13" fill="#64748b">元のアプリ</text>
+  <text x="658" y="61" text-anchor="middle" font-size="18" font-weight="600" fill="#202b3c">サーバー</text>
+  <path d="M102 108 V496 M658 108 V496" stroke="#d5dde7" stroke-width="1.5" stroke-dasharray="3 7"/>
 
-.d2-3238550226 .text-italic {
-	font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
-}
-]]></style><style type="text/css"><![CDATA[.shape {
-  shape-rendering: geometricPrecision;
-  stroke-linejoin: round;
-}
-.connection {
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.blend {
-  mix-blend-mode: multiply;
-  opacity: 0.5;
-}
+  <rect x="42" y="130" width="120" height="28" rx="6" fill="#ffffff"/>
+  <text x="102" y="150" text-anchor="middle" font-size="15" font-weight="600" fill="#2563eb">リクエスト</text>
+  <path d="M102 184 H252 M508 184 H658" fill="none" stroke="#2563eb" stroke-width="2.5" marker-end="url(#forward)"/>
+  <circle cx="102" cy="184" r="4" fill="#2563eb"/>
+  <text x="589" y="170" text-anchor="middle" font-size="13" fill="#64748b">送信</text>
+  <path d="M530 184 V278 H508" fill="none" stroke="#68778d" stroke-width="1.8" stroke-dasharray="4 5" stroke-linejoin="round" marker-end="url(#after)"/>
+  <circle cx="530" cy="184" r="3" fill="#68778d"/>
 
-		.d2-3238550226 .fill-N1{fill:#0A0F25;}
-		.d2-3238550226 .fill-N2{fill:#676C7E;}
-		.d2-3238550226 .fill-B5{fill:#EDF0FD;}
-		.d2-3238550226 .stroke-B2{stroke:#0D32B2;}.appendix text.text{fill:#0A0F25}.md{--color-fg-default:#0A0F25;--color-fg-muted:#676C7E;--color-fg-subtle:#9499AB;--color-canvas-default:#FFFFFF;--color-canvas-subtle:#EEF1F8;--color-border-default:#0D32B2;--color-border-muted:#0D32B2;--color-neutral-muted:#EEF1F8;--color-accent-fg:#0D32B2;--color-accent-emphasis:#0D32B2;--color-attention-subtle:#676C7E;--color-danger-fg:red;}.light-code{display: block}.dark-code{display: none}]]></style><g class="Y2xpZW50"><g class="shape" ><rect x="12" y="52" width="162" height="66" rx="8" stroke="#586577" fill="#EDF0FD" class=" fill-B5" style="stroke-width:2;" /></g><text x="93" y="90.5" fill="#0A0F25" class="text fill-N1" style="text-anchor:middle;font-size:16px">クライアント</text></g><g class="aW50ZXJjZXB0b3I="><g class="shape" ><rect x="324" y="52" width="121" height="66" rx="8" stroke="#586577" fill="#EDF0FD" class=" fill-B5" style="stroke-width:2;" /></g><text x="384.5" y="90.5" fill="#0A0F25" class="text fill-N1" style="text-anchor:middle;font-size:16px">Interceptor</text></g><g class="c2VydmVy"><g class="shape" ><rect x="614" y="52" width="123" height="66" rx="8" stroke="#586577" fill="#EDF0FD" class=" fill-B5" style="stroke-width:2;" /></g><text x="675.5" y="90.5" fill="#0A0F25" class="text fill-N1" style="text-anchor:middle;font-size:16px">サーバー</text></g><g class="KGNsaWVudCAtLSApWzBd"><path d="M 93 120 L 93 1049" stroke="#586577" fill="none" class="connection" style="stroke-width:2;stroke-dasharray:12.000000,11.838767;" mask="url(#d2-3238550226)" /></g><g class="KGludGVyY2VwdG9yIC0tIClbMF0="><path d="M 384.5 120 L 384.5 1049" stroke="#586577" fill="none" class="connection" style="stroke-width:2;stroke-dasharray:12.000000,11.838767;" mask="url(#d2-3238550226)" /></g><g class="KHNlcnZlciAtLSApWzBd"><path d="M 675.5 120 L 675.5 1049" stroke="#586577" fill="none" class="connection" style="stroke-width:2;stroke-dasharray:12.000000,11.838767;" mask="url(#d2-3238550226)" /></g><g class="KGNsaWVudCAtJmd0OyBpbnRlcmNlcHRvcilbMF0="><marker id="mk-d2-3238550226-3984410330" markerWidth="10" markerHeight="12" refX="7" refY="6" viewBox="0 0 10 12" orient="auto" markerUnits="userSpaceOnUse"> <polygon points="0,0 10,6 0,12" fill="#586577" class="connection" stroke-width="2" /> </marker><path d="M 95 198 L 380.5 198" stroke="#586577" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="238.5" y="204" fill="#676C7E" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px">リクエスト</text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IGludGVyY2VwdG9yKVswXQ=="><marker id="mk-d2-3238550226-1250714520" markerWidth="10" markerHeight="12" refX="7" refY="6" viewBox="0 0 10 12" orient="auto" markerUnits="userSpaceOnUse"> <polygon points="0,0 10,6 0,12" fill="#245bba" class="connection" stroke-width="2" /> </marker><path d="M 386.5 278 L 470 278 S 480 278 480 288 L 480 323.5 S 480 333.5 470 333.5 L 388.5 333.5" stroke="#245bba" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-1250714520)" mask="url(#d2-3238550226)" /><text x="480.5" y="303" fill="#245bba" class="text-italic" style="text-anchor:middle;font-size:16px"><tspan x="480.5" dy="0">request.onEnter</tspan><tspan x="480.5" dy="18.5">送信前にJSONを変更</tspan></text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IHNlcnZlcilbMF0="><path d="M 386.5 413.5 L 671.5 413.5" stroke="#586577" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="530.5" y="419" fill="#676C7E" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px">変更後のリクエストを送信</text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IGludGVyY2VwdG9yKVsxXQ=="><path d="M 386.5 493.5 L 461.5 493.5 S 471.5 493.5 471.5 503.5 L 471.5 539 S 471.5 549 461.5 549 L 388.5 549" stroke="#586577" fill="none" class="connection" style="stroke-width:2;stroke-dasharray:8.000000,7.892511;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="472" y="519" fill="#586577" class="text-italic" style="text-anchor:middle;font-size:16px"><tspan x="472" dy="0">request.onLeave</tspan><tspan x="472" dy="18.5">送信成功後の処理</tspan></text></g><g class="KHNlcnZlciAtJmd0OyBpbnRlcmNlcHRvcilbMF0="><path d="M 673.5 629 L 388.5 629" stroke="#586577" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="530.5" y="635" fill="#676C7E" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px">レスポンス</text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IGludGVyY2VwdG9yKVsyXQ=="><path d="M 386.5 709 L 470 709 S 480 709 480 719 L 480 754.5 S 480 764.5 470 764.5 L 388.5 764.5" stroke="#245bba" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-1250714520)" mask="url(#d2-3238550226)" /><text x="480.5" y="734" fill="#245bba" class="text-italic" style="text-anchor:middle;font-size:16px"><tspan x="480.5" dy="0">response.onEnter</tspan><tspan x="480.5" dy="18.5">返却前にJSONを変更</tspan></text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IGNsaWVudClbMF0="><path d="M 382.5 844.5 L 97 844.5" stroke="#586577" fill="none" class="connection" style="stroke-width:2;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="238.5" y="850" fill="#676C7E" class="text-italic fill-N2" style="text-anchor:middle;font-size:16px">変更後のレスポンスを返却</text></g><g class="KGludGVyY2VwdG9yIC0mZ3Q7IGludGVyY2VwdG9yKVszXQ=="><path d="M 386.5 924.5 L 461.5 924.5 S 471.5 924.5 471.5 934.5 L 471.5 970 S 471.5 980 461.5 980 L 388.5 980" stroke="#586577" fill="none" class="connection" style="stroke-width:2;stroke-dasharray:8.000000,7.892511;" marker-end="url(#mk-d2-3238550226-3984410330)" mask="url(#d2-3238550226)" /><text x="472" y="950" fill="#586577" class="text-italic" style="text-anchor:middle;font-size:16px"><tspan x="472" dy="0">response.onLeave</tspan><tspan x="472" dy="18.5">返却成功後の処理</tspan></text></g><mask id="d2-3238550226" maskUnits="userSpaceOnUse" x="-13" y="27" width="775" height="1048">
-<rect x="-13" y="27" width="775" height="1048" fill="white"></rect>
-<rect x="188" y="188" width="101" height="21" fill="black"></rect>
-<rect x="393" y="287" width="175" height="37" fill="black"></rect>
-<rect x="413" y="403" width="235" height="21" fill="black"></rect>
-<rect x="393" y="503" width="158" height="37" fill="black"></rect>
-<rect x="480" y="619" width="101" height="21" fill="black"></rect>
-<rect x="393" y="718" width="175" height="37" fill="black"></rect>
-<rect x="121" y="834" width="235" height="21" fill="black"></rect>
-<rect x="393" y="934" width="158" height="37" fill="black"></rect>
-</mask></svg></svg>
+    <g transform="translate(252 146)">
+      <rect width="256" height="76" rx="12" fill="#edf4ff" stroke="#a8c7fa"/>
+      <circle cx="25" cy="27" r="12" fill="#2563eb"/>
+      <text x="25" y="31" text-anchor="middle" font-size="12" font-weight="650" fill="#ffffff">1</text>
+      <text class="code" x="47" y="33" font-size="17" fill="#2563eb">request.onEnter</text>
+      <text x="47" y="58" font-size="15" fill="#64748b">送信前・JSONを変更</text>
+    </g>
+
+    <g transform="translate(252 240)">
+      <rect width="256" height="76" rx="12" fill="#ffffff" stroke="#dce2ea"/>
+      <circle cx="25" cy="27" r="12" fill="#e9eef5"/>
+      <text x="25" y="31" text-anchor="middle" font-size="12" font-weight="650" fill="#202b3c">2</text>
+      <text class="code" x="47" y="33" font-size="17" fill="#202b3c">request.onLeave</text>
+      <text x="47" y="58" font-size="15" fill="#64748b">送信成功後の処理</text>
+    </g>
+
+  <path d="M240 329 H520" stroke="#dce2ea"/>
+  <rect x="598" y="324" width="120" height="28" rx="6" fill="#ffffff"/>
+  <text x="658" y="344" text-anchor="middle" font-size="15" font-weight="600" fill="#2563eb">レスポンス</text>
+  <path d="M658 380 H508 M252 380 H102" fill="none" stroke="#2563eb" stroke-width="2.5" marker-end="url(#forward)"/>
+  <circle cx="658" cy="380" r="4" fill="#2563eb"/>
+  <text x="175" y="366" text-anchor="middle" font-size="13" fill="#64748b">返却</text>
+  <path d="M232 380 V474 H252" fill="none" stroke="#68778d" stroke-width="1.8" stroke-dasharray="4 5" stroke-linejoin="round" marker-end="url(#after)"/>
+  <circle cx="232" cy="380" r="3" fill="#68778d"/>
+
+    <g transform="translate(252 342)">
+      <rect width="256" height="76" rx="12" fill="#edf4ff" stroke="#a8c7fa"/>
+      <circle cx="25" cy="27" r="12" fill="#2563eb"/>
+      <text x="25" y="31" text-anchor="middle" font-size="12" font-weight="650" fill="#ffffff">3</text>
+      <text class="code" x="47" y="33" font-size="17" fill="#2563eb">response.onEnter</text>
+      <text x="47" y="58" font-size="15" fill="#64748b">返却前・JSONを変更</text>
+    </g>
+
+    <g transform="translate(252 436)">
+      <rect width="256" height="76" rx="12" fill="#ffffff" stroke="#dce2ea"/>
+      <circle cx="25" cy="27" r="12" fill="#e9eef5"/>
+      <text x="25" y="31" text-anchor="middle" font-size="12" font-weight="650" fill="#202b3c">4</text>
+      <text class="code" x="47" y="33" font-size="17" fill="#202b3c">response.onLeave</text>
+      <text x="47" y="58" font-size="15" fill="#64748b">返却成功後の処理</text>
+    </g>
+
+  <path d="M36 542 H60" stroke="#2563eb" stroke-width="2.5"/>
+  <text x="69" y="547" font-size="13" fill="#64748b">通信の流れ</text>
+  <path d="M178 542 H202" stroke="#68778d" stroke-width="1.8" stroke-dasharray="4 5"/>
+  <text x="211" y="547" font-size="13" fill="#64748b">転送後の処理</text>
+  <text x="724" y="547" text-anchor="end" font-size="12" fill="#64748b">schemaVersion 2</text>
+</svg>
