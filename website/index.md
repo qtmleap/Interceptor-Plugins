@@ -4,7 +4,7 @@ lang: ja
 layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
-  text: 通信をカスタマイズ
+  text: '<span lang="en">Frida-like hooks for HTTP traffic</span>'
   tagline: リクエストやレスポンスのJSONを書き換え、通信に合わせて独自のJavaScriptを実行できます。
   image:
     src: /images/interceptor.png
@@ -17,13 +17,40 @@ hero:
       text: アプリで試す
       link: /getting-started
 features:
-  - title: 条件に合う通信を処理
-    details: ホスト・パス・メソッドで、処理する通信を指定します。
+  - icon:
+      src: /icons/filter.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: 条件に合う通信を処理
+    details: ホスト・パス・メソッドで対象を指定できます。条件に一致した通信だけがHookに渡されるため、JavaScriptに同じ条件判定を書く必要はありません。
     link: /api
-  - title: JSONを直接変更
-    details: リクエストやレスポンスのJSON本文を書き換えます。
+  - icon:
+      src: /icons/json.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: JSONを直接変更
+    details: リクエストやレスポンスのJSON本文を、JavaScriptで直接読み書きできます。実際に送るデータの値を差し替えたり、フィールドを追加したりできます。
     link: /authoring
-  - title: Linuxでも開発・配布
-    details: BunとRust製シミュレーターで開発できます。署名にXcodeは不要です。
-    link: /devcontainer
+  - icon:
+      src: /icons/terminal.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: Linuxでも開発
+    details: BunとRust製シミュレーターで構文をチェックし、テストデータでHookの動作を確認できます。プラグインの開発やテストに、macOSやXcodeは必要ありません。
+    link: /authoring
+  - icon:
+      src: /icons/package.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: 署名して配布
+    details: 作成したプラグインに署名し、リポジトリで配布できます。利用者はInterceptorにリポジトリのURLを登録し、一覧から必要なプラグインを選んで読み込めます。
+    link: /publishing
 ---

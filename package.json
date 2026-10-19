@@ -21,6 +21,8 @@
     "diagrams:check": "bun tools/render-hook-diagrams.ts --check"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "tailwindcss": "4.3.3",
     "typescript": "5.8.3",
     "vitepress": "1.6.4"
   },

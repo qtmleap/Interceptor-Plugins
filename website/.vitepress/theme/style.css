@@ -1,3 +1,7 @@
+/* Keep VitePress's base styles; only compile the utilities used by @apply. */
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
 .VPHome .VPHero .name,
 .VPHome .VPHero .text {
   text-wrap: balance;
@@ -15,5 +19,22 @@
 }
 
 .VPHome .VPHero .image-src {
-  border-radius: 22%;
+  @apply rounded-[22%] drop-shadow-[-2px_4px_6px_#0003];
+}
+
+/* VitePress sizes both image and halo to 192 / 256 / 320px. */
+.VPHome .VPHero .image-bg {
+  @apply pointer-events-none bg-[linear-gradient(-45deg,#bd34fe_50%,#47caff_50%)] blur-[44px];
+}
+
+@media (min-width: 640px) {
+  .VPHome .VPHero .image-bg {
+    @apply blur-[56px];
+  }
+}
+
+@media (min-width: 960px) {
+  .VPHome .VPHero .image-bg {
+    @apply blur-[68px];
+  }
 }

@@ -4,7 +4,7 @@ lang: en
 layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
-  text: Customize HTTP traffic
+  text: Frida-like hooks for HTTP traffic
   tagline: Change request and response JSON or run your own JavaScript as traffic passes through Interceptor.
   image:
     src: /images/interceptor.png
@@ -17,13 +17,40 @@ hero:
       text: Try it in the app
       link: /en/getting-started
 features:
-  - title: Match the traffic you need
-    details: Choose the host, path and method to process.
+  - icon:
+      src: /icons/filter.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: Match the traffic you need
+    details: Choose a host, path and method. Hooks run only for matching traffic, so you can focus on the processing instead of repeating those checks in JavaScript.
     link: /en/api
-  - title: Edit JSON directly
-    details: Change request or response JSON.
+  - icon:
+      src: /icons/json.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: Edit JSON directly
+    details: Read and change request and response JSON directly in JavaScript. Replace values or add fields in the data actually sent to the server or client.
     link: /en/authoring
-  - title: Develop and publish on Linux
-    details: Develop with Bun and the Rust simulator. Signing does not require Xcode.
-    link: /en/devcontainer
+  - icon:
+      src: /icons/terminal.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: Develop on Linux
+    details: Use Bun and the Rust simulator to check syntax and run hooks against test data. Develop and test plugins on Linux without macOS or Xcode.
+    link: /en/authoring
+  - icon:
+      src: /icons/package.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: Sign and share
+    details: Sign your plugins and share them through a repository. Users add its URL to Interceptor, then choose the plugins they want to load.
+    link: /en/publishing
 ---

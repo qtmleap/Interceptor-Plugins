@@ -71,8 +71,10 @@ def main():
             assert [entry.get("href") for entry in page.icons] == [icon], f"incorrect favicon base: {file}"
             expected = {icon} | (set() if home else
                         {f"/my-plugins/diagrams/plugin-hooks-{locale}-{theme}.svg" for theme in ("light", "dark")})
+            if home:
+                expected |= {f"/my-plugins/icons/{name}.svg" for name in ("filter", "json", "terminal", "package")}
             assert {image.get("src") for image in page.images} == expected, f"unexpected image or injected image: {file}"
-            assert len(page.images) == (2 if home else 3), f"unexpected image count: {file}"
+            assert len(page.images) == (6 if home else 3), f"unexpected image count: {file}"
             assert all(not any(key.startswith("on") for key in image) for image in page.images)
             assert "/my-plugins/" in html
             assert "qtmleap.github.io/Interceptor-Plugins" not in html

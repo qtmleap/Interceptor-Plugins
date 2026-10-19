@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import { loadContext, plainValues, substitute } from './metadata.mts'
 import { substituteFrontmatter, tokenPlugin } from './tokens.mts'
@@ -141,6 +142,7 @@ export default defineConfig({
     }
   },
   vite: {
+    plugins: [tailwindcss()],
     server: { fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] } }
   }
 })
