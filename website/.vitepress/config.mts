@@ -5,6 +5,7 @@ import { substituteFrontmatter, tokenPlugin } from './tokens.mts'
 
 const context = loadContext()
 const SOURCE = 'https://github.com/' + context.githubRepository
+const siteTitle = context.githubRepository === 'qtmleap/Interceptor-Plugins' ? 'Interceptor Plugins' : context.name
 
 const texts = {
   root: { unconfigured: '未設定' },
@@ -36,7 +37,10 @@ const labels = {
 
 function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
   const prefix = locale === 'root' ? '/' : '/en/'
-  return pages.map((page) => ({ text: labels[locale][page], link: `${prefix}${page}` }))
+  return [
+    { text: locale === 'root' ? 'ガイド' : 'Guide', link: `${prefix}getting-started`, activeMatch: '/(getting-started|authoring|examples|publishing|devcontainer)' },
+    { text: locale === 'root' ? 'リファレンス' : 'Reference', link: `${prefix}api`, activeMatch: '/api' }
+  ]
 }
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
@@ -74,7 +78,8 @@ export default defineConfig({
   cleanUrls: false,
   lastUpdated: false,
   srcExclude: ['**/node_modules/**'],
-  title: context.name,
+  title: siteTitle,
+  head: [['link', { rel: 'icon', type: 'image/png', href: `${context.base}images/interceptor.png` }]],
   // Keep repository-controlled metadata in an external JS asset, never an inline script.
   metaChunk: true,
   markdown: {
@@ -82,12 +87,13 @@ export default defineConfig({
   },
   transformPageData(pageData) {
     const text = textsFor(pageData.relativePath)
-    pageData.frontmatter = substituteFrontmatter(pageData.frontmatter, context, text) as typeof pageData.frontmatter
+    pageData.frontmatter = substituteFrontmatter(pageData.frontmatter, { ...context, name: siteTitle }, text) as typeof pageData.frontmatter
     const values = plainValues(context, text)
     if (pageData.title) pageData.title = substitute(pageData.title, values)
     if (pageData.description) pageData.description = substitute(pageData.description, values)
   },
   themeConfig: {
+    logo: { src: '/images/interceptor.png', alt: '' },
     search: {
       provider: 'local',
       options: {

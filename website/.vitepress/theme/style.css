@@ -1,0 +1,19 @@
+.VPHome .VPHero .name,
+.VPHome .VPHero .text {
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.VPHome .VPHero .tagline,
+.VPHome .VPFeature .details {
+  text-wrap: pretty;
+  word-break: auto-phrase;
+}
+
+.VPNavBarTitle .logo {
+  border-radius: 6px;
+}
+
+.VPHome .VPHero .image-src {
+  border-radius: 22%;
+}

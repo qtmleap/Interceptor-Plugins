@@ -13,14 +13,25 @@ import tempfile
 class Page(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.images, self.text = [], []
+        self.images, self.text, self.hero_text, self.icons = [], [], [], []
+        self.in_heading = False
 
     def handle_starttag(self, tag, attrs):
         if tag == "img":
             self.images.append(dict(attrs))
+        if tag == "h1":
+            self.in_heading = True
+        if tag == "link" and "icon" in dict(attrs).get("rel", "").split():
+            self.icons.append(dict(attrs))
+
+    def handle_endtag(self, tag):
+        if tag == "h1":
+            self.in_heading = False
 
     def handle_data(self, text):
         self.text.append(text)
+        if self.in_heading:
+            self.hero_text.append(text)
 
 
 def main():
@@ -45,15 +56,23 @@ def main():
         run("bun", "run", "check:docs")
         context = json.loads((root / "build/docs-context.json").read_text())
         assert context["fingerprint"] is None and context["base"] == "/my-plugins/"
-        for file in ("index.html", "en/index.html"):
+        for file in ("index.html", "en/index.html", "authoring.html", "en/authoring.html",
+                     "api.html", "en/api.html", "examples.html", "en/examples.html",
+                     "getting-started.html", "en/getting-started.html"):
             html = (root / "build/docs" / file).read_text()
             page = Page()
             page.feed(html)
             assert name in "".join(page.text), f"display name was not rendered literally: {file}"
-            assert len(page.images) == 2, f"unexpected homepage images: {file}"
             locale = "en" if file.startswith("en/") else "ja"
-            expected = {f"/my-plugins/diagrams/plugin-hooks-{locale}-{theme}.svg" for theme in ("light", "dark")}
-            assert {image.get("src") for image in page.images} == expected, f"display name injected an image: {file}"
+            home = file in ("index.html", "en/index.html")
+            icon = "/my-plugins/images/interceptor.png"
+            if home:
+                assert name in "".join(page.hero_text), f"custom hero name was not rendered literally: {file}"
+            assert [entry.get("href") for entry in page.icons] == [icon], f"incorrect favicon base: {file}"
+            expected = {icon} | (set() if home else
+                        {f"/my-plugins/diagrams/plugin-hooks-{locale}-{theme}.svg" for theme in ("light", "dark")})
+            assert {image.get("src") for image in page.images} == expected, f"unexpected image or injected image: {file}"
+            assert len(page.images) == (2 if home else 3), f"unexpected image count: {file}"
             assert all(not any(key.startswith("on") for key in image) for image in page.images)
             assert "/my-plugins/" in html
             assert "qtmleap.github.io/Interceptor-Plugins" not in html
