@@ -69,7 +69,7 @@ After the compatible build is published, follow these steps for a schema 2 scrip
 
 1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
 2. Open **Settings → SSL Proxying List** and add the host shown in the script’s target conditions.
-3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Live HTTP hooks → Approve This Revision…**, then confirm. A revision is the exact package containing all source files and the manifest shown.
+3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Use on live traffic → Approve for Live Traffic…**, then confirm. A revision is the exact package containing all source files and the manifest shown.
 4. Return to **Settings**, turn on **Status**, generate matching traffic and open the host's traffic from **Home** to inspect the forwarded JSON.
 
 Approval lets the script read its declared traffic data and, when permitted, change JSON sent to a server or returned to a client.
