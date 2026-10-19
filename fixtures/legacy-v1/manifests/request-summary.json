@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "76532D8C-608A-4EA3-AC16-755BABF2AB7E",
+  "name": "Request summary",
+  "version": "1.0.1",
+  "subscriptions": [
+    {
+      "phase": "request.completed",
+      "match": {
+        "hosts": [
+          "example.com"
+        ],
+        "methods": [
+          "GET"
+        ]
+      }
+    }
+  ],
+  "read": {
+    "metadata": [
+      "method",
+      "host",
+      "path"
+    ],
+    "headers": [],
+    "queryKeys": [],
+    "body": {
+      "mode": "none"
+    }
+  },
+  "endpointBindings": [
+    "preview"
+  ],
+  "settings": {}
+}

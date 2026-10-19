@@ -1,19 +1,16 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "5B478646-4A70-4EF1-B04B-6CB63450E5A4",
   "name": "Server error filter",
-  "version": "1.0.1",
-  "subscriptions": [
+  "version": "2.0.0",
+  "matches": [
     {
-      "phase": "response.completed",
-      "match": {
-        "hosts": [
-          "example.com"
-        ],
-        "status": {
-          "min": 500,
-          "max": 599
-        }
+      "hosts": [
+        "example.com"
+      ],
+      "status": {
+        "min": 500,
+        "max": 599
       }
     }
   ],
@@ -26,8 +23,12 @@
     "headers": [],
     "queryKeys": [],
     "body": {
-      "mode": "none"
+      "mode": "json"
     }
+  },
+  "write": {
+    "requestBody": false,
+    "responseBody": true
   },
   "endpointBindings": [
     "preview"

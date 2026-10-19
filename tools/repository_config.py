@@ -333,50 +333,32 @@ def _host_ok(host):
     return (0 < len(host) <= 253 and all(_HOST_MATCH_LABEL.fullmatch(l) and l[0] != "-" and l[-1] != "-" for l in labels))
 
 
-def validate_manifest(m, what):
-    """Mirror of the v1 PluginManifest rules the app enforces (the Swift driver re-validates with production code)."""
-    keys = ("schemaVersion", "id", "name", "version", "subscriptions", "read", "endpointBindings", "settings")
-    require_exact_keys(m, keys, what)
-    if not is_int(m["schemaVersion"]) or m["schemaVersion"] != 1:
-        _fail(what, "unsupported schemaVersion")
-    check_uuid(m["id"], f"{what} id")
-    if not is_display_name(m["name"]):
-        _fail(what, "invalid name")
-    if not isinstance(m["version"], str) or len(m["version"]) > 64 or not _SEMVER.fullmatch(m["version"]):
-        _fail(what, "version must be SemVer")
-    subs = m["subscriptions"]
-    if not isinstance(subs, list) or not 1 <= len(subs) <= 8:
-        _fail(what, "1 to 8 subscriptions required")
-    headers_phase = False
-    for sub in subs:
-        require_exact_keys(sub, ("phase", "match"), what + " subscription")
-        if sub["phase"] not in _PHASES:
-            _fail(what, "unknown phase")
-        headers_phase = headers_phase or sub["phase"].endswith(".headers")
-        match = sub["match"]
-        if not isinstance(match, dict) or "hosts" not in match or not set(match) <= {"hosts", "methods", "path", "status"}:
-            _fail(what, "invalid match")
-        hosts = _strings(match["hosts"], what + " hosts", 1, 32)
-        if len(set(hosts)) != len(hosts) or not all(_host_ok(h) for h in hosts):
-            _fail(what, "invalid hosts")
-        if "methods" in match:
-            methods = _strings(match["methods"], what + " methods", 1, 16)
-            if len(set(methods)) != len(methods) or not all(re.fullmatch(r"[A-Z]{1,16}", x) for x in methods):
-                _fail(what, "invalid methods")
-        if "path" in match:
-            path = match["path"]
-            require_exact_keys(path, ("kind", "value"), what + " path")
-            if path["kind"] not in ("exact", "prefix") or not isinstance(path["value"], str) \
-                    or not re.fullmatch(r"/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/]|%[0-9A-Fa-f]{2})*", path["value"]) \
-                    or len(path["value"]) > 1024:
-                _fail(what, "invalid path match")
-        if "status" in match:
-            status = match["status"]
-            require_exact_keys(status, ("min", "max"), what + " status")
-            if not sub["phase"].startswith("response.") or not is_int(status["min"]) or not is_int(status["max"]) \
-                    or not 100 <= status["min"] <= status["max"] <= 599:
-                _fail(what, "invalid status range")
-    read = m["read"]
+def _validate_match(match, what, allow_status):
+    if not isinstance(match, dict) or "hosts" not in match or not set(match) <= {"hosts", "methods", "path", "status"}:
+        _fail(what, "invalid match")
+    hosts = _strings(match["hosts"], what + " hosts", 1, 32)
+    if len(set(hosts)) != len(hosts) or not all(_host_ok(h) for h in hosts):
+        _fail(what, "invalid hosts")
+    if "methods" in match:
+        methods = _strings(match["methods"], what + " methods", 1, 16)
+        if len(set(methods)) != len(methods) or not all(re.fullmatch(r"[A-Z]{1,16}", x) for x in methods):
+            _fail(what, "invalid methods")
+    if "path" in match:
+        path = match["path"]
+        require_exact_keys(path, ("kind", "value"), what + " path")
+        if path["kind"] not in ("exact", "prefix") or not isinstance(path["value"], str) \
+                or not re.fullmatch(r"/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/]|%[0-9A-Fa-f]{2})*", path["value"]) \
+                or len(path["value"]) > 1024:
+            _fail(what, "invalid path match")
+    if "status" in match:
+        status = match["status"]
+        require_exact_keys(status, ("min", "max"), what + " status")
+        if not allow_status or not is_int(status["min"]) or not is_int(status["max"]) \
+                or not 100 <= status["min"] <= status["max"] <= 599:
+            _fail(what, "invalid status range")
+
+
+def _validate_read(read, what, schema_version, headers_phase):
     require_exact_keys(read, ("metadata", "headers", "queryKeys", "body"), what + " read")
     metadata = _strings(read["metadata"], what + " metadata", 0, 4)
     if len(set(metadata)) != len(metadata) or not set(metadata) <= set(_METADATA):
@@ -390,10 +372,13 @@ def validate_manifest(m, what):
     body = read["body"]
     if not isinstance(body, dict) or "mode" not in body or not set(body) <= {"mode", "pointers"}:
         _fail(what, "invalid body")
-    if body["mode"] in ("none", "raw"):
+    if body["mode"] == "none" or (body["mode"] == "raw" and schema_version == 1):
         if "pointers" in body:
             _fail(what, "pointers not allowed")
-    elif body["mode"] == "jsonPointers":
+    elif body["mode"] == "json" and schema_version == 2:
+        if "pointers" in body:
+            _fail(what, "pointers not allowed")
+    elif body["mode"] == "jsonPointers" and schema_version == 1:
         pointers = _strings(body.get("pointers"), what + " pointers", 1, 32)
         if len(set(pointers)) != len(pointers) or not all(
                 len(p) <= 256 and (p == "" or (p[0] == "/" and not re.search(r"~(?![01])", p))) for p in pointers):
@@ -402,6 +387,58 @@ def validate_manifest(m, what):
         _fail(what, "invalid body mode")
     if headers_phase and body["mode"] != "none":
         _fail(what, "header phases cannot read the body")
+
+
+def validate_manifest(m, what):
+    """Mirror of the PluginManifest rules the app enforces (the Swift driver re-validates with production code).
+
+    Schema 1 is the legacy dry-run shape; schema 2 declares `matches` and `write` for the HTTP lifecycle hooks.
+    """
+    version = m.get("schemaVersion") if isinstance(m, dict) else None
+    if not is_int(version) or version not in (1, 2):
+        if isinstance(m, dict) and "schemaVersion" in m:
+            _fail(what, "unsupported schemaVersion")
+    common = ("schemaVersion", "id", "name", "version")
+    tail = ("read", "endpointBindings", "settings")
+    optional = tuple(key for key in ("author", "summary") if isinstance(m, dict) and key in m)
+    if version == 2:
+        require_exact_keys(m, common + ("matches", "read", "write", "endpointBindings", "settings") + optional, what)
+    else:
+        require_exact_keys(m, common + ("subscriptions",) + tail + optional, what)
+    for key, max_chars, max_bytes in (("author", 80, 256), ("summary", 280, 1024)):
+        if key in m:
+            text = m[key]
+            if not isinstance(text, str) or not text.strip() or len(text) > max_chars \
+                    or len(text.encode("utf-8", "replace")) > max_bytes \
+                    or any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Cs") for c in text):
+                _fail(what, f"invalid {key}")
+    check_uuid(m["id"], f"{what} id")
+    if not is_display_name(m["name"]):
+        _fail(what, "invalid name")
+    if not isinstance(m["version"], str) or len(m["version"]) > 64 or not _SEMVER.fullmatch(m["version"]):
+        _fail(what, "version must be SemVer")
+    headers_phase = False
+    if version == 2:
+        matches = m["matches"]
+        if not isinstance(matches, list) or not 1 <= len(matches) <= 16:
+            _fail(what, "1 to 16 matches required")
+        for match in matches:
+            _validate_match(match, what, True)
+        write = m["write"]
+        require_exact_keys(write, ("requestBody", "responseBody"), what + " write")
+        if not all(isinstance(write[key], bool) for key in write):
+            _fail(what, "write grants must be booleans")
+    else:
+        subs = m["subscriptions"]
+        if not isinstance(subs, list) or not 1 <= len(subs) <= 8:
+            _fail(what, "1 to 8 subscriptions required")
+        for sub in subs:
+            require_exact_keys(sub, ("phase", "match"), what + " subscription")
+            if sub["phase"] not in _PHASES:
+                _fail(what, "unknown phase")
+            headers_phase = headers_phase or sub["phase"].endswith(".headers")
+            _validate_match(sub["match"], what, sub["phase"].startswith("response."))
+    _validate_read(m["read"], what, version, headers_phase)
     bindings = _strings(m["endpointBindings"], what + " endpointBindings", 0, 4)
     if len(set(bindings)) != len(bindings) or not all(re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,31}", b) for b in bindings):
         _fail(what, "invalid endpointBindings")

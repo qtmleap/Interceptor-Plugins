@@ -18,7 +18,7 @@ const pages = ['getting-started', 'authoring', 'api', 'examples', 'publishing', 
 const labels = {
   root: {
     'getting-started': 'はじめに',
-    authoring: 'プラグインを書く',
+    authoring: '作成',
     api: 'API',
     examples: 'サンプル',
     publishing: '公開',
@@ -26,7 +26,7 @@ const labels = {
   },
   en: {
     'getting-started': 'Getting started',
-    authoring: 'Writing a plugin',
+    authoring: 'Authoring',
     api: 'API',
     examples: 'Examples',
     publishing: 'Publishing',
@@ -41,7 +41,12 @@ function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
   const prefix = locale === 'root' ? '/' : '/en/'
-  const hooks = [['onRequest', 'onrequest'], ['onResponse', 'onresponse']]
+  const hooks = [
+    ['request.onEnter', 'request-onenter'],
+    ['request.onLeave', 'request-onleave'],
+    ['response.onEnter', 'response-onenter'],
+    ['response.onLeave', 'response-onleave']
+  ]
   const items = pages.map((page) => ({
     text: labels[locale][page], link: `${prefix}${page}`,
     ...(page === 'api' ? { items: hooks.map(([text, anchor]) => ({ text, link: `${prefix}api#${anchor}` })) } : {})

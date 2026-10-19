@@ -37,7 +37,8 @@ try {
     regular(file);
     if (fs.statSync(file).size > 131072) throw new Error(`Source too large: ${entry}`);
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifests', entry.slice(0, -3) + '.json'), 'utf8'));
-    const hooks = ['request', 'response'].filter(hook => manifest.subscriptions.some(s => s.phase.startsWith(hook + '.')))
+    const v2 = manifest.schemaVersion === 2;
+    const hooks = v2 ? [] : ['request', 'response'].filter(hook => manifest.subscriptions.some(s => s.phase.startsWith(hook + '.')))
       .map(hook => hook === 'request' ? 'onRequest' : 'onResponse');
     const checkFile = path.join(root, '__interceptor_hook_check.ts');
     const checkText = hooks.map(hook => `const __interceptorCheck_${hook}: (event: Interceptor.Event, config: Interceptor.Config) => Interceptor.Result = ${hook};`).join('\n');
@@ -58,6 +59,15 @@ try {
       if (![file, sdk, checkFile].includes(input.fileName) && !program.isSourceFileDefaultLibrary(input)) {
         throw new Error(`${entry}: additional TypeScript dependencies are not emitted; keep this plugin self-contained`);
       }
+    }
+    if (v2) {
+      const attaches = [];
+      const count = node => {
+        if (ts.isCallExpression(node) && node.expression.getText(source) === 'Interceptor.attach') attaches.push(node);
+        ts.forEachChild(node, count);
+      };
+      count(source);
+      if (attaches.length < 1 || attaches.length > 16) throw new Error(`${entry}: schema 2 sources call Interceptor.attach 1 to 16 times`);
     }
     for (const hook of hooks) {
       if (!source.statements.some(s => ts.isFunctionDeclaration(s) && s.name?.text === hook && s.body)) {

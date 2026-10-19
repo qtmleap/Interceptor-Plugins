@@ -4,30 +4,31 @@
 
 Documentation: [English](https://qtmleap.github.io/Interceptor-Plugins/en/) / [日本語](https://qtmleap.github.io/Interceptor-Plugins/)
 
-Official examples and a repository template for Interceptor's JavaScript preview feature. Author `.ts` files and manifests, compile readable JavaScript, test it with the app's own QuickJS engine, and publish signed v1 packages over HTTPS.
+Official examples and a repository template for adding JavaScript processing to Interceptor traffic. Match hosts, paths and methods; change request JSON before sending or response JSON before returning; run callbacks after successful forwarding. Author TypeScript and schema 2 manifests, test with the app's shared QuickJS engine, then publish signed packages over HTTPS.
 
 ## Add the official repository
 
-Use Interceptor **1.1.0 or later with the Plugins preview**. In **Settings → Plugins → + → Add Repository**, enter:
+Use an Interceptor build supporting schema 2 and the four HTTP lifecycle hooks. In **Settings → Plugins → + → Add Repository**, enter:
 
 ```text
 https://qtmleap.github.io/Interceptor-Plugins/repository.json
 ```
 
-Preview the source, declarations and signing-key fingerprint before adding. A signature from a key seen for the first time does not automatically authenticate its publisher. Compare the full fingerprint through a channel you already trust before pinning it. The README and Pages feed share GitHub administration, so this page alone is not an independent trust channel.
+Preview the repository name and signing-key fingerprint before adding. Inspect source and manifest on each script detail screen after adding. A signature from a key seen for the first time does not automatically authenticate its publisher. Compare the full fingerprint through a channel you already trust before pinning it. The README and Pages feed share GitHub administration, so this page alone is not an independent trust channel.
 
 Official public-key fingerprint: **b29b13755f2df72858c5d14ea7c1b293fa379b9ad3ea2f86f016dfa0735cd96a**
 
-Choose a package, inspect its source, and select **Import Disabled**. Open the imported script, choose the hook below, then **Run Synthetic Test**.
+Choose a package, inspect its source and grants, then import it disabled. Open its details, select a hook and input JSON, and run a synthetic test. Synthetic tests display returned actions and JSON body changes without sending traffic or webhooks.
 
-| Sample | Hook | Default displayed JSON payload |
-|---|---|---|
-| Request summary | Request | `{"summary":"GET example.com/synthetic"}` |
-| Server error filter | Response | `{"host":"example.com","status":503}` |
+### Request summary
 
-For the filter's no-action case, change the response status in the test input to `200`. Choose the matching hook: a request-only script does not define `onResponse`, and vice versa.
+`request.onEnter` changes `limit` to `5` in JSON for `POST api.example.com/search`. `response.onEnter` adds `maintenance: true` to the associated response. The leave hooks build test actions from forwarded content.
 
-This preview runs explicit synthetic input and displays the returned intent. It does not connect these samples to captured traffic, run them in the background, or deliver webhooks. Imports are stored disabled. No request body, headers or query values are requested by these samples.
+### Server error filter
+
+For `example.com` responses with status 500–599, `response.onEnter` adds `maintenance: true` to JSON and `response.onLeave` builds a result. Change status to `200` for a non-matching case.
+
+For live traffic, users must inspect the source and grants and approve the exact revision. Importing or editing alone never activates it. Live actions are neither stored nor delivered. See [setup](website/en/getting-started.md) and the [four-hook diagram](website/en/index.md).
 
 ## Development container
 
@@ -44,16 +45,16 @@ bun run check
 
 The command fetches the pinned public Interceptor source, builds a Rust simulator using its unchanged QuickJS bridge, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
 
-Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See [TypeScript authoring](docs/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; QuickJS is fetched at that revision; Bun supplies Ed25519 primitives without a new cryptography dependency.
+Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See the [authoring guide](website/en/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; QuickJS is fetched at that revision; Bun supplies Ed25519 primitives without a new cryptography dependency.
 
 ## Emulate a plugin
 
 ```sh
 bun run simulator check build/scripts/request-summary.js
-bun run simulator run build/scripts/request-summary.js onRequest fixtures/request-event.json fixtures/config.json
+bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/request-event.json fixtures/config.json --manifest manifests/request-summary.json
 ```
 
-Run `bun run check` first to generate the JavaScript. `check` parses syntax without executing the script; `run` invokes the hook and prints its action JSON without sending webhooks. The built `.tools/bin/interceptor-simulator` is a standalone binary for its OS and CPU, with normal system-library dependencies.
+Run `bun run check` first to generate the JavaScript. `check` parses syntax without executing the script; `run` invokes one lifecycle hook and prints its actions and body mutation JSON without sending webhooks. The built `.tools/bin/interceptor-simulator` is a standalone binary for its OS and CPU, with normal system-library dependencies.
 
 ## Make your own repository
 

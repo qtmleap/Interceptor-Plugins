@@ -56,7 +56,7 @@ Interfaces: validated context from `repository-config.json`; `build/docs` static
 
 Owner: same infrastructure worker; Codex verifies actual workflow source and official action pins.
 
-Files: `.github/workflows/ci.yml`, `.github/workflows/publish.yml`, configured-template test input list.
+Files: `.github/workflows/integration.yaml`, `.github/workflows/deployment.yaml`, configured-template test input list.
 
 - [x] Add an always-running read-only docs check to PR/master CI.
 - [x] Build/upload docs without a signing environment or Pages/OIDC write permissions in the existing publishing workflow.

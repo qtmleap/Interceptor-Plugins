@@ -19,6 +19,7 @@ if python3 -c 'import json,sys; sys.exit(json.load(open("repository-config.json"
     python3 tools/guard.py --root "$TASK_ROOT" --repository "$TASK_REPOSITORY" --ref refs/heads/master
 fi
 "$TASK_VERIFIER" samples "$TASK_ROOT" "$TASK_TEMP/site"
+"$TASK_VERIFIER" legacy-samples "$TASK_ROOT"
 python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERIFIER" --publisher "$TASK_PUBLISHER"
 "$TASK_PUBLISHER" publish "$TASK_TEMP/site" --id "$TASK_REPO_ID" --name "$TASK_REPO_NAME" --sequence 1
 "$TASK_VERIFIER" verify-local "$TASK_ROOT" "$TASK_TEMP/site"
@@ -33,7 +34,7 @@ python3 - "$TASK_TEMP/wrong-shape/plugins/request-summary.json" "$TASK_TEMP/wron
 import json, sys
 from pathlib import Path
 p = Path(sys.argv[1]); package = json.loads(p.read_text())
-package['source'] = "function onRequest(event, config) { return {actions:[{type:'webhook',endpointId:config.endpoints.preview,json:{summary:event.method+' '+event.host+event.path}}]}; }"
+package['source'] = 'Interceptor.attach(' + json.dumps(package['manifest']['matches'][0]) + ', {request:{onEnter(event){event.request.body.limit=5;}}});'
 p.write_text(json.dumps(package))
 Path(sys.argv[2]).write_text(package['source'])
 PY

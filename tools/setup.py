@@ -25,7 +25,7 @@ from repository_config import (OFFICIAL_REPOSITORY, ToolError, check_fingerprint
 
 ENVIRONMENT = 'github-pages'
 SECRET = 'INTERCEPTOR_REPOSITORY_KEY_B64'
-WORKFLOW = 'publish.yml'
+WORKFLOW = 'deployment.yaml'
 MASTER_POLICY = {'protected_branches': False, 'custom_branch_policies': True}
 
 

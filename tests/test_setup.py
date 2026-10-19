@@ -57,9 +57,9 @@ class FakeAPI:
             self.pages = {'html_url': 'https://alice.github.io/my-plugins/', 'cname': None, 'build_type': 'workflow'}
             self._interrupt('pages')
             return copy.deepcopy(self.pages)
-        if path == base + '/actions/workflows/publish.yml':
+        if path == base + '/actions/workflows/deployment.yaml':
             return copy.deepcopy(self.workflow)
-        if path == base + '/actions/workflows/publish.yml/enable':
+        if path == base + '/actions/workflows/deployment.yaml/enable':
             self.workflow['state'] = 'active'
             self._interrupt('workflow')
             return None

@@ -1,90 +1,146 @@
 [
   {
-    "name": "summary GET",
+    "name": "search limit changed to five on enter",
     "plugin": "request-summary",
-    "hook": "request",
+    "phase": "request.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000001",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "request.completed",
-      "time": "2026-01-01T00:00:00Z",
-      "request": {
-        "method": "GET",
-        "host": "example.com",
-        "path": "/synthetic"
-      }
-    },
-    "expected": {
-      "actions": [
-        {
-          "type": "webhook",
-          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
-          "json": {
-            "summary": "GET example.com/synthetic"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "summary GET other path",
-    "plugin": "request-summary",
-    "hook": "request",
-    "event": {
-      "id": "00000000-0000-4000-8000-000000000001",
-      "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "request.completed",
-      "time": "2026-01-01T00:00:00Z",
-      "request": {
-        "method": "GET",
-        "host": "example.com",
-        "path": "/a/b"
-      }
-    },
-    "expected": {
-      "actions": [
-        {
-          "type": "webhook",
-          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
-          "json": {
-            "summary": "GET example.com/a/b"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "summary POST ignored",
-    "plugin": "request-summary",
-    "hook": "request",
-    "event": {
-      "id": "00000000-0000-4000-8000-000000000001",
-      "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "request.completed",
+      "phase": "request.onEnter",
       "time": "2026-01-01T00:00:00Z",
       "request": {
         "method": "POST",
-        "host": "example.com",
-        "path": "/synthetic"
+        "host": "api.example.com",
+        "path": "/search",
+        "body": {
+          "query": "x",
+          "limit": 50
+        }
       }
     },
     "expected": {
-      "actions": []
+      "actions": [],
+      "mutation": {
+        "body": {
+          "query": "x",
+          "limit": 5
+        }
+      }
     }
   },
   {
-    "name": "summary other host ignored",
+    "name": "search summary on leave",
     "plugin": "request-summary",
-    "hook": "request",
+    "phase": "request.onLeave",
     "event": {
       "id": "00000000-0000-4000-8000-000000000001",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "request.completed",
+      "phase": "request.onLeave",
       "time": "2026-01-01T00:00:00Z",
       "request": {
-        "method": "GET",
-        "host": "example.org",
-        "path": "/synthetic"
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search",
+        "body": {
+          "query": "x",
+          "limit": 5
+        }
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "summary": "POST api.example.com/search"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "search response flagged on enter",
+    "plugin": "request-summary",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      }
+    },
+    "expected": {
+      "actions": [],
+      "mutation": {
+        "body": {
+          "ok": true,
+          "maintenance": true
+        }
+      }
+    }
+  },
+  {
+    "name": "search response summary on leave",
+    "plugin": "request-summary",
+    "phase": "response.onLeave",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onLeave",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "maintenance": true
+        }
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "path": "/search",
+            "status": 200
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "search other host unmatched",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "other.example.com",
+        "path": "/search",
+        "body": {
+          "limit": 50
+        }
       }
     },
     "expected": {
@@ -92,33 +148,57 @@
     }
   },
   {
-    "name": "summary wrong hook",
+    "name": "search other path unmatched",
     "plugin": "request-summary",
-    "hook": "response",
+    "phase": "request.onEnter",
     "event": {
-      "id": "00000000-0000-4000-8000-000000000003",
+      "id": "00000000-0000-4000-8000-000000000001",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
-      "time": "2026-01-01T00:00:01Z",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
       "request": {
-        "method": "GET",
-        "host": "example.com",
-        "path": "/synthetic"
-      },
-      "response": {
-        "status": 503
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/other",
+        "body": {
+          "limit": 50
+        }
       }
     },
-    "expectError": "scriptError"
+    "expected": {
+      "actions": []
+    }
   },
   {
-    "name": "filter 503",
+    "name": "search GET unmatched",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "api.example.com",
+        "path": "/search",
+        "body": {
+          "limit": 50
+        }
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter 503 flagged on enter",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onEnter",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
@@ -126,7 +206,42 @@
         "path": "/synthetic"
       },
       "response": {
-        "status": 503
+        "status": 503,
+        "body": {
+          "error": "down"
+        }
+      }
+    },
+    "expected": {
+      "actions": [],
+      "mutation": {
+        "body": {
+          "error": "down",
+          "maintenance": true
+        }
+      }
+    }
+  },
+  {
+    "name": "filter 503 reported on leave",
+    "plugin": "server-error-filter",
+    "phase": "response.onLeave",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onLeave",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503,
+        "body": {
+          "error": "down",
+          "maintenance": true
+        }
       }
     },
     "expected": {
@@ -145,11 +260,11 @@
   {
     "name": "filter 500 lower bound",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onLeave",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onLeave",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
@@ -157,7 +272,8 @@
         "path": "/synthetic"
       },
       "response": {
-        "status": 500
+        "status": 500,
+        "body": {}
       }
     },
     "expected": {
@@ -176,11 +292,11 @@
   {
     "name": "filter 599 upper bound",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onLeave",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onLeave",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
@@ -188,7 +304,8 @@
         "path": "/synthetic"
       },
       "response": {
-        "status": 599
+        "status": 599,
+        "body": {}
       }
     },
     "expected": {
@@ -205,18 +322,253 @@
     }
   },
   {
-    "name": "filter 200 ignored",
+    "name": "filter 499 unmatched",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onEnter",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
         "host": "example.com",
         "path": "/synthetic"
+      },
+      "response": {
+        "status": 499,
+        "body": {}
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter rejects out-of-range status 600",
+    "plugin": "server-error-filter",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 600,
+        "body": {}
+      }
+    },
+    "expectError": "invalidInput"
+  },
+  {
+    "name": "filter other host unmatched",
+    "plugin": "server-error-filter",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.org",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503,
+        "body": {}
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter has no request registration",
+    "plugin": "server-error-filter",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic",
+        "body": {}
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary request.onEnter leaves null body unchanged",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search",
+        "body": null
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary request.onEnter leaves array body unchanged",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search",
+        "body": []
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary request.onEnter leaves string body unchanged",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search",
+        "body": "not an object"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary request.onEnter leaves missing body unchanged",
+    "plugin": "request-summary",
+    "phase": "request.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onEnter",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary response.onEnter leaves null body unchanged",
+    "plugin": "request-summary",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      },
+      "response": {
+        "status": 200,
+        "body": null
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary response.onEnter leaves array body unchanged",
+    "plugin": "request-summary",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      },
+      "response": {
+        "status": 200,
+        "body": []
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary response.onEnter leaves string body unchanged",
+    "plugin": "request-summary",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
+      },
+      "response": {
+        "status": 200,
+        "body": "not an object"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "request-summary response.onEnter leaves missing body unchanged",
+    "plugin": "request-summary",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/search"
       },
       "response": {
         "status": 200
@@ -227,13 +579,13 @@
     }
   },
   {
-    "name": "filter 499 ignored",
+    "name": "server-error-filter response.onEnter leaves null body unchanged",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onEnter",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
@@ -241,7 +593,8 @@
         "path": "/synthetic"
       },
       "response": {
-        "status": 499
+        "status": 503,
+        "body": null
       }
     },
     "expected": {
@@ -249,13 +602,13 @@
     }
   },
   {
-    "name": "filter 600 ignored",
+    "name": "server-error-filter response.onEnter leaves array body unchanged",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onEnter",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
@@ -263,7 +616,8 @@
         "path": "/synthetic"
       },
       "response": {
-        "status": 600
+        "status": 503,
+        "body": []
       }
     },
     "expected": {
@@ -271,17 +625,40 @@
     }
   },
   {
-    "name": "filter other host ignored",
+    "name": "server-error-filter response.onEnter leaves string body unchanged",
     "plugin": "server-error-filter",
-    "hook": "response",
+    "phase": "response.onEnter",
     "event": {
       "id": "00000000-0000-4000-8000-000000000003",
       "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
+      "phase": "response.onEnter",
       "time": "2026-01-01T00:00:01Z",
       "request": {
         "method": "GET",
-        "host": "example.org",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503,
+        "body": "not an object"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "server-error-filter response.onEnter leaves missing body unchanged",
+    "plugin": "server-error-filter",
+    "phase": "response.onEnter",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.onEnter",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
         "path": "/synthetic"
       },
       "response": {
@@ -291,53 +668,5 @@
     "expected": {
       "actions": []
     }
-  },
-  {
-    "name": "filter POST 503 still reported",
-    "plugin": "server-error-filter",
-    "hook": "response",
-    "event": {
-      "id": "00000000-0000-4000-8000-000000000003",
-      "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "response.completed",
-      "time": "2026-01-01T00:00:01Z",
-      "request": {
-        "method": "POST",
-        "host": "example.com",
-        "path": "/synthetic"
-      },
-      "response": {
-        "status": 503
-      }
-    },
-    "expected": {
-      "actions": [
-        {
-          "type": "webhook",
-          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
-          "json": {
-            "host": "example.com",
-            "status": 503
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "filter wrong hook",
-    "plugin": "server-error-filter",
-    "hook": "request",
-    "event": {
-      "id": "00000000-0000-4000-8000-000000000001",
-      "exchangeID": "00000000-0000-4000-8000-000000000002",
-      "phase": "request.completed",
-      "time": "2026-01-01T00:00:00Z",
-      "request": {
-        "method": "GET",
-        "host": "example.com",
-        "path": "/synthetic"
-      }
-    },
-    "expectError": "scriptError"
   }
 ]

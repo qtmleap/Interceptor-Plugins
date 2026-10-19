@@ -4,52 +4,62 @@
 
 ドキュメント: [日本語](https://qtmleap.github.io/Interceptor-Plugins/) / [English](https://qtmleap.github.io/Interceptor-Plugins/en/)
 
-InterceptorのJavaScript試行機能で使える公式サンプルと、配布リポジトリのテンプレートです。TypeScriptの `.ts` とmanifestを編集し、生成したJavaScriptをアプリと同じQuickJSでテストして、署名付きのv1パッケージをHTTPSで配布できます。
+Interceptorの通信にJavaScriptの処理を追加する公式サンプルと、配布リポジトリのテンプレートです。ホスト・パス・メソッドなどで対象を指定し、送信前のリクエストや返却前のレスポンスのJSONを変更できます。転送成功後に呼ぶHookも用意しています。TypeScriptとスキーマ2のmanifestを編集し、アプリと共通のQuickJSで検証して、署名付きパッケージとして配布できます。
 
 ## 公式リポジトリを追加する
 
-Pluginsプレビューに対応した **Interceptor 1.1.0以降**で、**設定 → Plugins → ＋ → リポジトリを追加**を開き、次のURLを入力します。
+スキーマ2と4つのHookに対応したInterceptorで、**設定 → Plugins → ＋ → リポジトリを追加**を開き、次のURLを入力します。
 
 ```text
 https://qtmleap.github.io/Interceptor-Plugins/repository.json
 ```
 
-プレビューでソース・宣言・署名鍵の指紋を確認します。初めて見る鍵の署名が正しくても、それだけで公開者の本人確認が済むわけではありません。信頼できる別の経路で指紋全体を照合してからpinしてください。このREADMEとPagesは同じGitHub管理権限の影響を受けるため、このページだけを独立した確認経路とは扱わないでください。
+追加前のプレビューでリポジトリ名と署名鍵の指紋を確認します。ソースとmanifestは、追加後にスクリプトの詳細画面で確認できます。初めて見る鍵の署名が正しくても、それだけで公開者の本人確認が済むわけではありません。信頼できる別の経路で指紋全体を照合してから、署名鍵を信頼する操作を行ってください。このREADMEとPagesは同じGitHub管理権限の影響を受けるため、このページだけを別経路の確認に使わないでください。
 
 公式公開鍵の指紋: **b29b13755f2df72858c5d14ea7c1b293fa379b9ad3ea2f86f016dfa0735cd96a**
 
-サンプルを選び、ソースを確認して無効状態で読み込みます。読み込んだスクリプトを開き、次のフックを選んで合成データのテストを実行します。
+サンプルを選び、ソースと権限を確認して無効状態で読み込みます。詳細画面でHookと入力JSONを選び、合成テストを実行します。合成テストは通信やWebhookを送信せず、JSON本文の変更と返されたアクションを表示します。
 
-| サンプル | フック | 既定入力で表示されるJSONペイロード |
-|---|---|---|
-| Request summary | Request | `{"summary":"GET example.com/synthetic"}` |
-| Server error filter | Response | `{"host":"example.com","status":503}` |
+### Request summary
 
-アクションを返さないケースは、レスポンスのテスト入力のステータスを `200` に変えて確認できます。フックはサンプルに合わせて選択してください。Request専用のサンプルに `onResponse` は定義していません。
+`request.onEnter`は`POST api.example.com/search`のJSON本文の`limit`を`5`へ変更します。`response.onEnter`は対応するレスポンスに`maintenance: true`を追加します。各`onLeave`は転送後の内容からテスト用のアクションを作ります。
 
-現在のプレビューは、明示的に渡した合成入力で実行し、返されたアクションを表示します。サンプルを実キャプチャへ自動接続したり、バックグラウンドで実行したり、Webhookへ送信したりはしません。読み込み時は無効状態で保存します。この2本は本文・ヘッダー・クエリ値を要求しません。
+### Server error filter
+
+`example.com`のステータス500〜599のレスポンスを対象に、`response.onEnter`でJSONに`maintenance: true`を追加し、`response.onLeave`で結果を作ります。ステータスを`200`に変えると対象から外れます。
+
+実通信で使うときは、利用者がソースと権限を確認し、対象のリビジョンを承認します。読み込みや編集だけでは有効になりません。実通信ではアクションを保存・送信しません。[設定手順](website/getting-started.md)と[4つのHookの図・説明](website/index.md)を参照してください。
 
 ## コンテナで開発する
 
-[qtmleap/devcontainersを基にした開発環境](docs/devcontainer.md)を用意しています。VS Codeの **Dev Containers: Reopen in Container** で開き、`bun run check:authoring` でBun・Python・HTTPSの検証を実行できます。実QuickJS・署名の全体検証と初回の署名セットアップはMacで行います。
+[qtmleap/devcontainersを基にした開発環境](docs/devcontainer.md)を用意しています。VS Codeの **Dev Containers: Reopen in Container** で開き、`bun run check`で型チェック、QuickJSの実行、署名付きフィードの検証を実行できます。初回の署名セットアップと配布もLinuxで行えます。
 
 ## ローカルでテストする
 
-検証にはXcode 27.0（Swift 6.4）が使えるMac、Bun（`.bun-version` のバージョン）、Python 3、Gitを使います。利用するSwift packageのdeployment targetはmacOS 14のままですが、古い既定のSwiftコンパイラでは固定した実行基盤をビルドできません。リポジトリのルートで実行します。
+LinuxまたはmacOSで、Bun（`.bun-version`のバージョン）、Python 3、OpenSSL、Git、Rust 1.74以降、Cコンパイラを使います。Xcodeは不要です。リポジトリのルートで実行します。
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
 bun run check
 ```
 
-固定した公開Interceptorソースを取得し、既存publisherとQuickJS検証ツールをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改変検知を確認します。公式の秘密鍵は使わず、公開処理も行いません。
+固定した公開Interceptorソースを取得し、共通のQuickJSブリッジを使うRust製シミュレーターをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改変検知を確認します。公式の秘密鍵は使わず、公開処理も行いません。
 
-編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。フックの型と実行環境の制約は[TypeScriptの書き方](docs/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSや暗号処理はコピーしていません。
+編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。フックの型と実行環境の制約は[作成ガイド](website/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSはそのSHAから取得し、Ed25519の署名にはBunの暗号機能を使います。
+
+## シミュレーター
+
+```sh
+bun run simulator check build/scripts/request-summary.js
+bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/request-event.json fixtures/config.json --manifest manifests/request-summary.json
+```
+
+先に`bun run check`を実行してJavaScriptを生成します。`check`はスクリプトを実行せず構文を検査し、`run`は指定した1つのHookを実行してアクションと本文変更をJSONで返します。ビルドした`.tools/bin/interceptor-simulator`は対象のOS・CPU向けの単体バイナリとして実行できます。詳しくは[作成ガイド](website/authoring.md)を参照してください。
 
 ## 自分の配布リポジトリを作る
 
 1. **Use this template**から自分の公開リポジトリを作り、既定ブランチを **master** にしてcloneします。直接cloneした場合は、先に `origin` を自分のGitHubリポジトリへ変更してください。
-2. 対応するMacでGitHub CLIに管理者権限のあるアカウントでログインし、実行します。
+2. LinuxまたはmacOSで、GitHub CLIにリポジトリ管理権限のあるアカウントでログインし、実行します。
 
    ```sh
    bun install --frozen-lockfile --ignore-scripts
@@ -59,7 +69,7 @@ bun run check
 
    セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のenvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
 3. `src/NAME.ts`、manifest、期待値を編集し、公開用の設定・TypeScript・manifest・テストをcommitしてmasterへpushします。CIが型チェック、変換、実際のQuickJSでの検証、SHA-256の生成、署名、配布を行います。更新ごとの手動署名は不要です。
-4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵の指紋は、信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
+4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵の指紋は信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
 
 初回はPages・environment・Secretを設定するためのGitHub管理権限が必要です。通常のCIトークンだけでは初回の認証設定は行えません。組織の制限がある場合は管理者による設定が必要です。既存リポジトリの設定や復旧は[管理・公開手順](docs/maintaining.md)を参照してください。
 

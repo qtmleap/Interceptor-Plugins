@@ -57,7 +57,7 @@
 ### Task 2: Reproducible checks, signing and Pages workflow
 
 **Owner:** Codex.
-**Files:** tools/bootstrap.sh, tools/check.sh, tools/publish.sh, tools/fetch_previous.py, .github/workflows/ci.yml, .github/workflows/publish.yml, docs/maintaining.md.
+**Files:** tools/bootstrap.sh, tools/check.sh, tools/publish.sh, tools/fetch_previous.py, .github/workflows/integration.yaml, .github/workflows/deployment.yaml, docs/maintaining.md.
 
 **Consumes:** Task 1 CLIs and config exactly as above.
 **Produces:** `tools/check.sh` local/full CI command; `tools/publish.sh` builds and signs build/site with sequence, writes build/sequence.txt; workflow deploys and then only re-reads.

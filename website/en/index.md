@@ -1,49 +1,74 @@
 ---
 title: Home
-lang: en-US
+lang: en
 layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
-  text: Try, build and publish plugins
-  tagline: Interceptor Plugin adds custom JavaScript processing to Interceptor. You can currently try it with synthetic data and distribute signed packages.
+  text: Run JavaScript around HTTP traffic
+  tagline: Interceptor Plugin adds your own processing to matching requests and responses. Edit JSON before forwarding, or run a callback after forwarding succeeds.
   actions:
     - theme: brand
-      text: Try with test data
-      link: /en/getting-started
-    - theme: alt
       text: Write a plugin
       link: /en/authoring
     - theme: alt
-      text: Publish your repository
+      text: Try it in the app
+      link: /en/getting-started
+    - theme: alt
+      text: Publish
       link: /en/publishing
 features:
-  - title: Synthetic preview
-    details: A synchronous v1 synthetic preview. It returns at most two webhook intents and never delivers them, attaches to live capture, or runs in the background.
+  - title: Match the traffic you need
+    details: Choose the host, path and method. Only matching traffic reaches your callbacks, so each function does not need to repeat those checks.
     link: /en/api
-  - title: Develop in TypeScript
-    details: Edit src/*.ts and a manifest; the build type-checks and compiles readable JavaScript packages.
+  - title: Edit JSON directly
+    details: request.onEnter can edit JSON going to the server. response.onEnter can edit JSON going back to the client.
     link: /en/authoring
-  - title: Signing and trust
-    details: A package SHA-256 and the Ed25519 key fingerprint are different things. Compare the fingerprint through a channel you already trust.
-    link: /en/getting-started#verifying-trust
-  - title: Publish from the template
-    details: Clone and run setup to configure a signing key, GitHub secret and Pages. After you push master, CI signs and publishes.
-    link: /en/publishing
+  - title: Develop and publish on Linux
+    details: Build TypeScript with Bun and check syntax and execution with the Rust simulator. Package signing does not require Xcode.
+    link: /en/devcontainer
 ---
 
-## What is Interceptor Plugin?
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
 
-Interceptor is an app for inspecting network traffic between an app and a server. Interceptor Plugin adds custom processing written in JavaScript. Authors distribute a package containing the source and a manifest with its name, version and target conditions. This repository compiles TypeScript into JavaScript.
+## What is an Interceptor Plugin?
 
-You can currently import plugins and try their processing with synthetic data. Returned webhook intents are displayed, never delivered. Automatic execution on live traffic and changes to traffic are not available yet. Start with the [current API](api.md#onrequest) and [synthetic preview samples](examples.md#request-summary).
+Interceptor inspects traffic between a client and a server. Plugins add JavaScript processing to that traffic: change a search limit, add a field to a JSON response, or build a result from the forwarded data.
 
-## Build and publish
+Authors package source and a manifest together. The manifest declares the target traffic and the data the plugin may read or change. Users inspect these declarations and approve an exact revision before using it on live traffic.
 
-This site is the guide for users and authors of **%%REPOSITORY_NAME%%**. The repository URL is `%%REPOSITORY_URL%%`.
+## When JavaScript runs
 
-- [Getting started](getting-started.md): add, import and test
-- [TypeScript authoring](authoring.md): build, test and bump versions
-- [API reference](api.md): manifest fields, hooks, grants and bindings
-- [Examples](examples.md): the real sources and manifests
-- [Publishing](publishing.md): create and distribute your own repository
-- [Development container](devcontainer.md): Linux development and publishing
+Requests and responses each have an `onEnter` and an `onLeave` callback.
+
+<HookFlow locale="en" />
+
+### request.onEnter
+
+Runs before forwarding the client's request to the server. For example, `request.body.limit = 5` changes the JSON field before sending it.
+
+### request.onLeave
+
+Runs after the request was successfully forwarded locally. Use the forwarded data to build a result. Traffic is read-only at this point.
+
+### response.onEnter
+
+Runs before returning the server's response to the client. For example, `response.body.maintenance = true` adds a JSON field.
+
+### response.onLeave
+
+Runs after the response was successfully forwarded locally. Use the returned data to build a result. Traffic is read-only at this point.
+
+See the [API](api.md#request-onenter) for callbacks and [Authoring](authoring.md#edit-json) for before-and-after JSON. Webhook intents appear in synthetic-test results. Live processing does not save or deliver returned intents.
+
+## Create and publish
+
+This is the guide for **%%REPOSITORY_NAME%%**. Its feed URL is `%%REPOSITORY_URL%%`.
+
+- [Getting started](getting-started.md): import, test and approve a revision
+- [Authoring](authoring.md): TypeScript, JSON edits and the simulator
+- [API](api.md): four hooks, matching and permissions
+- [Examples](examples.md): source and manifests
+- [Publishing](publishing.md): sign and distribute packages
+- [Dev container](devcontainer.md): develop on Linux

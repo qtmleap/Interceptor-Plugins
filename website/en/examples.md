@@ -1,28 +1,26 @@
 ---
 title: Examples
-lang: en-US
+lang: en
 ---
 
 # Examples
 
-"Request summary" and "Server error filter" are existing, real samples from the repository.
+Both examples use schema 2. Inputs and expectations are in `fixtures/cases.json`. Returned webhook intents appear in synthetic-test results. Live processing does not save or deliver them.
 
-Long code blocks scroll horizontally. Use the code block’s copy control to copy the entire source.
+## Request summary {#request-summary}
 
-## Request summary
-
-On a completed `GET example.com` request, returns a `GET example.com/path` summary.
+Targets `POST api.example.com/search`. `request.onEnter` changes `limit` to `5`; `response.onEnter` adds `maintenance: true`. The leave callbacks build intents from the forwarded data.
 
 <<< ../../src/request-summary.ts{ts}
 
 <<< ../../manifests/request-summary.json{json}
 
-## Server error filter
+Place all four callbacks in one `attach`, or arrange calls by processing task. Each match must equal a manifest entry.
 
-Only for 5xx responses from `example.com`, returns the host and status.
+## Server error filter {#server-error-filter}
+
+Targets 5xx responses from `example.com`. Matching checks the status before callbacks, so the callback needs no duplicate status guard. It adds `maintenance: true` before forwarding and returns a host/status intent afterward.
 
 <<< ../../src/server-error-filter.ts{ts}
 
 <<< ../../manifests/server-error-filter.json{json}
-
-Neither reads a body, headers or query values (`body.mode` is `none`), and both use only the `preview` binding. The synthetic test does not apply manifest filters, so the sources also check method, host and status.

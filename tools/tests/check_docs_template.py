@@ -30,7 +30,7 @@ def main():
     name = 'Template </script><img src=x onerror=alert(1)><!--{{7*7}} & "tea"'
     with tempfile.TemporaryDirectory(prefix="interceptor-docs-template-") as directory:
         root = Path(directory)
-        for folder in ("tools", "src", "types", "manifests", "fixtures", "website"):
+        for folder in ("tools", "src", "types", "manifests", "fixtures", "website", "docs/diagrams"):
             shutil.copytree(args.root / folder, root / folder,
                             ignore=shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc"))
         for file in ("repository-config.json", "package.json", "bun.lock", ".bun-version"):
@@ -50,7 +50,11 @@ def main():
             page = Page()
             page.feed(html)
             assert name in "".join(page.text), f"display name was not rendered literally: {file}"
-            assert not page.images, f"display name injected an image: {file}"
+            assert len(page.images) == 2, f"unexpected homepage images: {file}"
+            locale = "en" if file.startswith("en/") else "ja"
+            expected = {f"/my-plugins/diagrams/plugin-hooks-{locale}-{theme}.svg" for theme in ("light", "dark")}
+            assert {image.get("src") for image in page.images} == expected, f"display name injected an image: {file}"
+            assert all(not any(key.startswith("on") for key in image) for image in page.images)
             assert "/my-plugins/" in html
             assert "qtmleap.github.io/Interceptor-Plugins" not in html
         print("Configured documentation template and literal metadata checks passed.")

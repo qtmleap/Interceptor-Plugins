@@ -9,7 +9,7 @@ How to create and distribute your own repository.
 
 ## Steps
 
-1. Select **Use this template**, create a **public** repository with default branch **master**, and clone it. If you clone directly, set `origin` to your own GitHub repository first.
+1. Open the [GitHub template repository](https://github.com/qtmleap/Interceptor-Plugins), choose **Use this template**, create a **Public** repository with default branch **master**, and clone your new repository. If you clone directly, set `origin` to your own GitHub repository first.
 2. On Linux or macOS with GitHub CLI signed in as a repository administrator, run:
 
    ```sh
@@ -28,7 +28,7 @@ After an interruption, keep the private key and checkpoint and rerun `bun run se
 
 Unsigned local feeds are available for development and require the app's unverified-repository acknowledgment. Official signed publication never falls back to unsigned metadata.
 
-## Single publication
+## Signing and publishing with GitHub Actions
 
 CI on master type-checks, compiles, tests with real QuickJS, generates SHA-256 hashes, signs, and publishes one GitHub Pages deployment. This site is part of that same deployment; `repository.json` and `plugins` belong to the signed feed. No manual signing is needed per release.
 

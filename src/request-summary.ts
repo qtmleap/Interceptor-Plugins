@@ -1,15 +1,52 @@
 /// <reference path="../types/interceptor.d.ts" />
-// The synthetic test does not apply manifest filters, so check method and host here too.
-function onRequest(event: Interceptor.Event, config: Interceptor.Config): Interceptor.Result {
-  const request = event && event.request;
-  if (!request || request.method !== 'GET' || request.host !== 'example.com') {
-    return { actions: [] };
+const search: Interceptor.Match = { hosts: ['api.example.com'], methods: ['POST'], path: { kind: 'exact', value: '/search' } };
+
+Interceptor.attach(search, {
+  request: {
+    onEnter(request) {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
+      request.body.limit = 5;
+    }
   }
-  return {
-    actions: [{
-      type: 'webhook',
-      endpointId: config.endpoints.preview!,
-      json: { summary: request.method + ' ' + request.host + request.path }
-    }]
-  };
-}
+});
+
+Interceptor.attach(search, {
+  request: {
+    onLeave(request, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return {
+        actions: [{
+          type: 'webhook',
+          endpointId,
+          json: { summary: request.method + ' ' + request.host + request.path }
+        }]
+      };
+    }
+  }
+});
+
+Interceptor.attach(search, {
+  response: {
+    onEnter(response) {
+      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
+      response.body.maintenance = true;
+    }
+  }
+});
+
+Interceptor.attach(search, {
+  response: {
+    onLeave(response, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return {
+        actions: [{
+          type: 'webhook',
+          endpointId,
+          json: { path: response.request.path!, status: response.status! }
+        }]
+      };
+    }
+  }
+});

@@ -1,18 +1,19 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "76532D8C-608A-4EA3-AC16-755BABF2AB7E",
   "name": "Request summary",
-  "version": "1.0.1",
-  "subscriptions": [
+  "version": "2.0.0",
+  "matches": [
     {
-      "phase": "request.completed",
-      "match": {
-        "hosts": [
-          "example.com"
-        ],
-        "methods": [
-          "GET"
-        ]
+      "hosts": [
+        "api.example.com"
+      ],
+      "methods": [
+        "POST"
+      ],
+      "path": {
+        "kind": "exact",
+        "value": "/search"
       }
     }
   ],
@@ -20,13 +21,18 @@
     "metadata": [
       "method",
       "host",
-      "path"
+      "path",
+      "status"
     ],
     "headers": [],
     "queryKeys": [],
     "body": {
-      "mode": "none"
+      "mode": "json"
     }
+  },
+  "write": {
+    "requestBody": true,
+    "responseBody": true
   },
   "endpointBindings": [
     "preview"

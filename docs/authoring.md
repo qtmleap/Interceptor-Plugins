@@ -1,29 +1,42 @@
-# TypeScript authoring
+# Plugin authoring
 
-Edit `src/NAME.ts`, `manifests/NAME.json` and `fixtures/cases.json`. Every source needs a manifest with the same lowercase kebab-case name. Keep repository/plugin IDs stable after initial setup, and bump the manifest version when source, compiled bytes or declarations change. The examples use v1 manifests and version 1.0.1; no new app schema is required.
+The authoring guide is maintained in the [VitePress guide](../website/en/authoring.md), with a [Japanese version](../website/authoring.md). See the [API reference](../website/en/api.md) for each hook's code and the [homepage](../website/en/index.md) for the client/Interceptor/server diagram.
 
-TypeScript 5.8.3 is pinned in `bun.lock`. Run `bun install --frozen-lockfile --ignore-scripts`, then `bun run check`. `bun run build` generates unsigned development packages in an absent or empty `build/site/`; preserve/remove only your previous generated site before rebuilding. The publishing workflow supplies the signing key after tests pass.
+Edit `src/NAME.ts`, `manifests/NAME.json` and `fixtures/cases.json` together. A source and manifest share the same lowercase kebab-case filename. Keep repository/plugin UUIDs stable after setup, and increase the manifest version when published content changes. New plugins use `schemaVersion: 2` with `matches`, explicit `read` grants and body `write` grants.
 
-Each plugin compiles independently, so helper/hook names can repeat between files. Use top-level functions with the matching manifest hook:
+Use `Interceptor.attach(match, hooks)` to bind callbacks to a declared host/path/method match. Only matching callbacks run. The source can combine target/handler definitions into one plugin. See the actual [sample source](../src/request-summary.ts), [manifest](../manifests/request-summary.json) and [cases](../fixtures/cases.json).
 
-```typescript
-/// <reference path="../types/interceptor.d.ts" />
-function onRequest(event: Interceptor.Event, config: Interceptor.Config): Interceptor.Result {
-  const host = event.request?.host;
-  const endpointId = config.endpoints.preview;
-  if (!host || !endpointId) return { actions: [] };
-  return { actions: [{ type: 'webhook', endpointId, json: { host } }] };
-}
+## request.onEnter
+
+Runs before forwarding the request. With JSON read access and `write.requestBody`, change `request.body` directly. The sample changes `{"query":"x","limit":50}` to `{"query":"x","limit":5}`.
+
+## request.onLeave
+
+Runs after successful local request forwarding; it does not guarantee server receipt or processing. It sees the forwarded body and cannot modify traffic. Return values are displayed in synthetic tests; the live adapter does not store or deliver actions.
+
+## response.onEnter
+
+Runs before returning the response. With JSON read access and `write.responseBody`, change `response.body` directly. `response.request` is a read-only view of the associated request.
+
+## response.onLeave
+
+Runs after successful local response forwarding; it does not guarantee client receipt or processing. Its traffic view is read-only. Failed forwarding never calls a leave hook.
+
+## Build and emulate
+
+On Linux or macOS, install the Bun version in `.bun-version`, Python 3, OpenSSL, Git, Rust 1.74 or later and a C compiler, or use the [development container](devcontainer.md). Xcode is not required for authoring, emulation, signing or publishing.
+
+```sh
+bun install --frozen-lockfile --ignore-scripts
+bun run check
+bun run simulator check build/scripts/request-summary.js
+bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/request-event.json fixtures/config.json --manifest manifests/request-summary.json
 ```
 
-Use `onResponse` for response subscriptions. `types/interceptor.d.ts` provides authoring types; optional event properties depend on the supplied JSON and requested read grants. It is not a second input validator or an execution permission grant. The app enforces the manifest, resource limits, JSON result shape and endpoint bindings. Keep literal expected outputs in fixtures and test alternate/no-action inputs too.
+`check` parses syntax without evaluating source. `run` executes one hook using the supplied event/config and full v2 manifest, and prints actions plus any authorized body mutation. No webhook is sent. The built `.tools/bin/interceptor-simulator` runs independently on its matching OS/CPU with compatible system libraries. The same pinned CQuickJS bridge is used by the app and Rust binary.
 
-The runtime evaluates one global script and synchronously invokes a hook. This initial authoring template uses self-contained files: imports/exports, asynchronous code, promises, TypedArrays, Node and browser APIs are unavailable. There is no `fetch`, console, filesystem, timer or module loader. Compilation rejects these common unsupported constructs; it is not a security sandbox. The existing bounded QuickJS host is the execution boundary. The preview returns at most two declarative webhook intents; it does not send them or automatically connect scripts to captured traffic.
+TypeScript 5.8.3 is pinned in `bun.lock`. Each source compiles independently as a synchronous global script. Imports/exports, asynchronous code, promises, TypedArrays, Node/browser APIs, `fetch`, console, filesystem and timers are unavailable. Each phase starts a fresh VM. The app also enforces matching, read/write grants and resource limits; compilation is not the execution boundary.
 
-`build/scripts/` contains readable generated JavaScript; never edit or commit it. Packaging recompiles from TypeScript every time, replaces the complete generated source set and fails on type errors. Simulator tests compare package source against the generated bytes and execute those bytes through the app's pinned QuickJS engine. The app's code viewer displays that JavaScript. SHA-256 covers the exact package bytes and the signed index authenticates those hashes.
+`build/scripts/` and `build/site/` are generated and ignored. Packaging recompiles sources and fails on type errors. `bun run build` writes unsigned development packages into an absent or empty `build/site/`; preserve/remove only your own prior output before rebuilding. Legacy schema 1 fixtures remain in `fixtures/legacy-v1/` for compatibility tests and cannot activate on live traffic.
 
-For a new feed, use `bun run setup` once after creating your own public GitHub repository. Your key stays outside the checkout; ordinary master pushes build, test, sign, deploy and verify the live feed. Wait for that verification before registering the printed URL. See [maintenance and recovery](maintaining.md).
-
-References: [TypeScript module modes](https://www.typescriptlang.org/tsconfig/module.html), [GitHub CLI environment secrets](https://cli.github.com/manual/gh_secret_set), [GitHub Pages API](https://docs.github.com/en/rest/pages/pages).
-
-Use `bun run check` on Linux or macOS for compilation, QuickJS execution and signed-feed validation. `bun run simulator check SOURCE.js` parses JavaScript without evaluating it; `bun run simulator run SOURCE.js onRequest EVENT.json CONFIG.json` executes a hook and prints its result. The Rust binary uses the unchanged pinned app bridge and never delivers actions. See [container setup](devcontainer.md).
+For your own signed feed, create a public GitHub template repository, run `bun run setup`, then follow [publishing](../website/en/publishing.md) and [maintenance/recovery](maintaining.md). Setup itself does not commit, push or deploy. Wait for signed live verification before registering the printed URL.

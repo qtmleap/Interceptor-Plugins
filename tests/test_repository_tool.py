@@ -352,6 +352,17 @@ class RepositoryToolTests(Case):
         with self.assertRaisesRegex(ToolError, "status 7"):
             self.run_samples(root, out, stub)
 
+    def test_sample_judgment_distinguishes_invalid_input_from_script_error(self):
+        failures = []
+        case = {"name": "invalid event", "expectError": "invalidInput"}
+        tool._judge(case, 4, b"", failures)
+        self.assertEqual(failures, [])
+        tool._judge(case, 6, b"", failures)
+        self.assertEqual(failures, ["invalid event: unexpected scriptError"])
+        failures.clear()
+        tool._judge(case, 0, b'{"actions":[]}', failures)
+        self.assertIn("expected invalidInput", failures[0])
+
     def test_samples_accept_expected_script_errors_and_require_full_coverage(self):
         root, out, stub = self.samples_fixture(6, "")
         cases = json.loads((root / "fixtures" / "cases.json").read_text())

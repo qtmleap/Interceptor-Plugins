@@ -5,6 +5,7 @@
   repository_tool.py fingerprint KEY
   repository_tool.py publish DIR --id UUID --name NAME --sequence N [--key KEY]
   repository_tool.py samples ROOT DIR
+  repository_tool.py legacy-samples ROOT
   repository_tool.py verify-local ROOT DIR [--signed]
   repository_tool.py previous ROOT FILE
   repository_tool.py verify-live ROOT SEQUENCE
@@ -677,18 +678,95 @@ def simulator_binary():
     raise ToolError("interceptor-simulator not found; run tools/build-runtime.sh")
 
 
-def run_hook(binary, directory, source, hook, event, config):
-    """Returns (exit code, stdout). Files are private temporaries; nothing is sent anywhere."""
+_PHASE_NAMES = ("request.onEnter", "request.onLeave", "response.onEnter", "response.onLeave")
+
+
+def run_hook(binary, directory, source, hook, event, config, manifest=None):
+    """Returns (exit code, stdout). Files are private temporaries; nothing is sent anywhere.
+
+    A manifest selects the schema 2 route (`run SOURCE PHASE EVENT CONFIG --manifest MANIFEST`).
+    """
+    files = [("source.js", source), ("event.json", event), ("config.json", config)]
+    if manifest is not None:
+        files.append(("manifest.json", manifest))
     paths = {}
-    for name, data in (("source.js", source), ("event.json", event), ("config.json", config)):
+    for name, data in files:
         paths[name] = Path(directory) / name
         paths[name].write_bytes(data)
+    command = [str(binary), "run", str(paths["source.js"]), hook, str(paths["event.json"]), str(paths["config.json"])]
+    if manifest is not None:
+        command += ["--manifest", str(paths["manifest.json"])]
     try:
-        proc = subprocess.run([str(binary), "run", str(paths["source.js"]), hook, str(paths["event.json"]),
-                               str(paths["config.json"])], capture_output=True, timeout=RUN_TIMEOUT)
+        proc = subprocess.run(command, capture_output=True, timeout=RUN_TIMEOUT)
     except (OSError, subprocess.SubprocessError) as error:
         raise ToolError(f"simulator failed to run: {error}")
     return proc.returncode, proc.stdout
+
+
+def _case_route(case, package, index):
+    """(hook argument, manifest bytes or None). Schema 2 packages use `phase`; schema 1 uses the legacy `hook`."""
+    version = package["manifest"]["schemaVersion"]
+    if version == 2:
+        if "hook" in case or case.get("phase") not in _PHASE_NAMES:
+            raise ToolError(f"fixtures/cases.json[{index}]: schema 2 cases need a lifecycle phase and no hook")
+        return case["phase"], canonical(package["manifest"])
+    if "phase" in case or case.get("hook") not in ("request", "response"):
+        raise ToolError(f"fixtures/cases.json[{index}]: schema 1 compatibility cases need hook request|response")
+    return ("onRequest" if case["hook"] == "request" else "onResponse"), None
+
+
+def _judge(case, code, output, failures):
+    """Compare one simulator run with expected / expectError; shared by the schema 2 samples and the v1 legacy suite."""
+    name = case["name"]
+    if code == 0:
+        if "expectError" in case:
+            failures.append(f"{name}: expected {case['expectError']}, got result {output.decode('utf-8', 'replace').strip()}")
+            return
+        try:
+            actual = strict_json(output)
+        except ToolError:
+            failures.append(f"{name}: simulator printed invalid JSON")
+            return
+        if not same_json(actual, case["expected"]):
+            failures.append(f"{name}: expected {canonical(case['expected']).decode()}, got {canonical(actual).decode()}")
+    elif code in (4, 6):
+        error = {4: "invalidInput", 6: "scriptError"}[code]
+        if case.get("expectError") != error:
+            failures.append(f"{name}: unexpected {error}")
+    else:
+        raise ToolError(f"{name}: simulator exited with status {code}")
+
+
+def legacy_samples(root):
+    """Run the preserved schema 1 conformance cases (fixtures/legacy-v1) on the common engine via the legacy route."""
+    root = Path(root)
+    base = root / "fixtures" / "legacy-v1"
+    config_json = read_regular(root / "fixtures" / "config.json", MAX_CONFIG)
+    cases = strict_json(read_regular(base / "cases.json"))
+    if not isinstance(cases, list) or not cases:
+        raise ToolError("fixtures/legacy-v1/cases.json: expected a non-empty array")
+    binary = simulator_binary()
+    sources, failures = {}, []
+    with tempfile.TemporaryDirectory(prefix="interceptor-legacy-") as temporary:
+        for index, case in enumerate(cases):
+            if not (isinstance(case, dict) and isinstance(case.get("name"), str) and isinstance(case.get("event"), dict)
+                    and case.get("hook") in ("request", "response") and "phase" not in case
+                    and ("expected" in case) != ("expectError" in case)
+                    and re.fullmatch(r"[a-z0-9-]+", str(case.get("plugin")))):
+                raise ToolError(f"fixtures/legacy-v1/cases.json[{index}]: invalid case")
+            plugin = case["plugin"]
+            if plugin not in sources:
+                sources[plugin] = read_regular(base / "src" / f"{plugin}.js", MAX_SOURCE)
+                manifest = strict_json(read_regular(base / "manifests" / f"{plugin}.json"))
+                validate_manifest(manifest, f"fixtures/legacy-v1/manifests/{plugin}.json")
+                if manifest.get("schemaVersion") != 1:
+                    raise ToolError(f"fixtures/legacy-v1/manifests/{plugin}.json: not schema 1")
+            hook = "onRequest" if case["hook"] == "request" else "onResponse"
+            code, output = run_hook(binary, temporary, sources[plugin], hook, canonical(case["event"]), config_json)
+            _judge(case, code, output, failures)
+    if failures:
+        raise ToolError("legacy v1 cases failed:\n  " + "\n  ".join(failures))
+    return f"legacy v1 samples ok: {len(cases)} cases, {len(sources)} sources"
 
 
 def samples(root, directory):
@@ -713,33 +791,19 @@ def samples(root, directory):
     with tempfile.TemporaryDirectory(prefix="interceptor-samples-") as temporary:
         for index, case in enumerate(cases):
             ok = (isinstance(case, dict) and isinstance(case.get("name"), str) and case.get("plugin") in packages
-                  and case.get("hook") in ("request", "response") and isinstance(case.get("event"), dict))
+                  and isinstance(case.get("event"), dict))
             if not ok:
                 raise ToolError(f"fixtures/cases.json[{index}]: invalid case")
             name = case["name"]
             has_expected, has_error = "expected" in case, "expectError" in case
-            if has_expected == has_error or not set(case) <= {"name", "plugin", "hook", "event", "expected", "expectError"}:
+            if has_expected == has_error or not set(case) <= {"name", "plugin", "hook", "phase", "event", "expected", "expectError"}:
                 raise ToolError(f"fixtures/cases.json[{index}] {name}: needs exactly one of expected / expectError")
+            package = packages[case["plugin"]]
+            hook, manifest = _case_route(case, package, index)
             covered.add(case["plugin"])
-            code, output = run_hook(binary, temporary, packages[case["plugin"]]["source"].encode("utf-8"),
-                                    "onRequest" if case["hook"] == "request" else "onResponse",
-                                    canonical(case["event"]), config_json)
-            if code == 0:
-                if has_error:
-                    failures.append(f"{name}: expected scriptError, got result {output.decode('utf-8', 'replace').strip()}")
-                    continue
-                try:
-                    actual = strict_json(output)
-                except ToolError:
-                    failures.append(f"{name}: simulator printed invalid JSON")
-                    continue
-                if not same_json(actual, case["expected"]):
-                    failures.append(f"{name}: expected {canonical(case['expected']).decode()}, got {canonical(actual).decode()}")
-            elif code == 6:
-                if case.get("expectError") != "scriptError":
-                    failures.append(f"{name}: unexpected scriptError")
-            else:
-                raise ToolError(f"{name}: simulator exited with status {code}")
+            code, output = run_hook(binary, temporary, package["source"].encode("utf-8"), hook, canonical(case["event"]),
+                                    config_json, manifest)
+            _judge(case, code, output, failures)
     if covered != set(packages):
         raise ToolError("fixtures/cases.json does not cover every package")
     if failures:
@@ -775,6 +839,8 @@ def main(argv):
             print(line)
     elif command == "samples" and len(args) == 2:
         print(samples(args[0], args[1]))
+    elif command == "legacy-samples" and len(args) == 1:
+        print(legacy_samples(args[0]))
     elif command == "verify-local" and len(args) == 2:
         print(verify_local(args[0], args[1], False))
     elif command == "verify-local" and len(args) == 3 and args[2] == "--signed":

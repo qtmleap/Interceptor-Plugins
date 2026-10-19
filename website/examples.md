@@ -5,24 +5,22 @@ lang: ja
 
 # サンプル
 
-このリポジトリの「Request summary」と「Server error filter」は、現在の合成テストで実行できるサンプルです。
+ソースとmanifestを同じページに載せています。サンプルはいずれもスキーマ2です。テストの入力と期待値は`fixtures/cases.json`にあります。Webhookアクションは合成テストの結果欄で確認するための送信要求です。実通信では戻り値を保存・送信しません。
 
-長いコードはコード枠を横にスクロールして確認できます。コピーするとコード全文を取得できます。
+## Request summary {#request-summary}
 
-## Request summary
-
-`GET example.com` のリクエスト完了時に、`GET example.com/path` 形式の要約を返します。
+`POST api.example.com/search`を対象にします。`request.onEnter`でJSONの`limit`を`5`へ変更し、`response.onEnter`で`maintenance: true`を追加します。各`onLeave`では転送した内容から送信要求を作ります。
 
 <<< ../src/request-summary.ts{ts}
 
 <<< ../manifests/request-summary.json{json}
 
-## Server error filter
+`Interceptor.attach`を処理ごとに並べても、1つの呼び出しに4つのHookを書いても構いません。対象条件はmanifestの`matches`と同じ内容にします。
 
-`example.com` の5xxレスポンスだけを対象に、ホストとステータスを返します。
+## Server error filter {#server-error-filter}
+
+`example.com`の5xxレスポンスを対象にします。ステータスの条件は対象判定で確認するため、Hook内の条件分岐は不要です。転送前にJSONへ`maintenance: true`を追加し、転送後にホストとステータスを含む送信要求を返します。
 
 <<< ../src/server-error-filter.ts{ts}
 
 <<< ../manifests/server-error-filter.json{json}
-
-どちらのサンプルも本文・ヘッダー・クエリ値を読み取らず（`body.mode` は `none`）、`preview` バインディングだけを使います。合成テストはmanifestのフィルターを適用しないため、ソース内でもメソッド、ホスト、ステータスを確認しています。

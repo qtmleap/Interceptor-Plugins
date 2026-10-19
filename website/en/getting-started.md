@@ -5,7 +5,7 @@ lang: en-US
 
 # Getting started
 
-You need **Interceptor 1.1.0 or later** with the Plugins preview. A plugin is a script that processes supplied traffic information. The current preview lets you run the samples with test data and inspect the result; it does not send or receive live traffic.
+The four hooks require an Interceptor build supporting schema 2 and live HTTP hooks. Import a plugin, test it with synthetic JSON, then approve its exact revision for live use. Plugin development also runs on Linux.
 
 ## Add the repository
 
@@ -41,27 +41,33 @@ The value on this page alone does not complete verification. This site and feed 
 
 ## Import and test
 
-The test shows what a script returns for the supplied input. It sends nothing to external servers.
+Synthetic tests execute input JSON without sending live traffic or webhooks.
 
-1. Choose a package from the list and inspect its source.
-2. Select **Import Disabled** to store it without enabling it.
-3. Open the imported script, choose its hook, and select **Run Synthetic Test** to run the test data.
+1. Select a package and inspect its source and manifest.
+2. Import it disabled.
+3. Open the script, select a phase and input JSON, and run the synthetic test.
 
-| Sample | Hook | Default displayed JSON payload |
-|---|---|---|
-| Request summary | Request | `{"summary":"GET example.com/synthetic"}` |
-| Server error filter | Response | `{"host":"example.com","status":503}` |
+For [Request summary](examples.md#request-summary), select `request.onEnter` and paste the full event below into the input JSON field. The input includes traffic metadata as well as the HTTP body.
 
-For the no-action case, change the response status in the test input to `200`. A request-only script does not define `onResponse`, and vice versa, so choose the hook that matches the script.
+<<< ../../fixtures/request-event.json{json}
 
-## What the preview does
+The body preview should show `{"query":"x","limit":5}`. Changing the host to `other.example.com` produces no mutation because it does not match.
 
-This is a synchronous v1 **synthetic preview**. It runs explicit input and displays the returned webhook intents.
+A synthetic test runs one phase. Selecting a leave phase does not send traffic; supply the data that would be visible after forwarding.
 
-- At most two intents are returned.
-- Nothing is **delivered** to a webhook.
-- It does not attach to live capture.
-- It does not run in the background.
-- Imports are stored disabled. The samples request no body, header or query values.
+## Use on live traffic
 
-If the result matches the table, you have checked the sample's result with test data. This is the extent of the current preview; there is no step to enable automatic execution on live traffic. See [Examples](examples.md) to try another sample. To create your own plugin, continue with [TypeScript authoring](authoring.md).
+For a schema 2 script, follow these steps. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
+
+1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
+2. Open **Settings → SSL Proxying List** and add the host declared in the plugin's `hosts` match.
+3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Live HTTP hooks → Approve This Revision…**, then confirm. A revision is the exact source/manifest combination shown.
+4. Return to **Settings**, turn on **Status**, generate matching traffic and open the host's traffic from **Home** to inspect the forwarded JSON.
+
+Approval lets the script read its declared traffic data and, when permitted, change JSON sent to a server or returned to a client.
+
+Adding or revoking approval, or saving or deleting a schema 2 script, ends the current capture connection. Changes apply on the user's next explicit connection. Decryption-host and certificate-trust configuration is still required. Approving a plugin does not add decryption targets.
+
+Importing or editing does not enable a revision. New or updated content needs fresh approval. Revoke approval or delete the script when no longer needed; revocation also ends an active connection.
+
+Live JSON hooks have [format and size limits](api.md#execution-and-limits). External webhook delivery and manual execution from Shortcuts are not supported.

@@ -5,69 +5,173 @@ lang: ja
 
 # APIリファレンス
 
-## 同期v1の合成プレビュー
+## Interceptor.attach
 
-フックは同期的に実行される関数で、`{ actions: [...] }` を返します。`actions` にはWebhookへの送信要求（intent）を最大2件指定できます。送信要求は画面に表示されるだけで、実際には送信されません。キャプチャした通信に合わせた実行や、バックグラウンド実行にも対応していません。型宣言はコードを書く際の補助です。型宣言そのものが入力を検証したり、実行権限を付与したりすることはありません。アプリは実行時に、入力と結果が制限の範囲内かを検証します。`read` は宣言として検証・保存されますが、現在の合成テストでは入力の絞り込みには使われません。
+`Interceptor.attach(match, hooks)`で、対象の通信と、その通信で呼ぶHookを指定します。ホスト、パス、メソッドなどの条件が一致したときだけ、対応する関数が呼ばれます。1つのソースに対象と処理を並べて、1つのプラグインとして配布できます。
+
+```ts
+const search: Interceptor.Match = {
+  hosts: ['api.example.com'],
+  methods: ['POST'],
+  path: { kind: 'exact', value: '/search' }
+};
+
+Interceptor.attach(search, {
+  request: {
+    onEnter(request) {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
+      request.body.limit = 5;
+    },
+    onLeave(request, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return { actions: [{
+        type: 'webhook',
+        endpointId,
+        json: { path: request.path! }
+      }] };
+    }
+  },
+  response: {
+    onEnter(response) {
+      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
+      response.body.maintenance = true;
+    },
+    onLeave(response, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return { actions: [{
+        type: 'webhook',
+        endpointId,
+        json: { status: response.status! }
+      }] };
+    }
+  }
+});
+```
+
+必要なHookだけを定義できます。第1引数は、そのHookが処理するリクエストまたはレスポンスです。第2引数の`config`には設定値とエンドポイントのバインディングが入ります。`response.request`から、そのレスポンスに対応するリクエストを参照できます。
+
+### 対象条件
+
+`match`はmanifestの`matches`に記載した条件のいずれかと同じ内容にします。宣言にない対象をソースで指定すると、実行時に拒否されます。
+
+- `hosts`: 完全一致するホスト名の配列。ワイルドカードや正規表現は使えません。
+- `methods`: 対象のHTTPメソッドの配列。省略するとメソッドで絞り込みません。
+- `path`: `exact`で完全一致、`prefix`で前方一致。クエリ文字列を除いたパスに適用します。
+- `status`: レスポンスのステータス範囲。`min`と`max`の両端を含みます。リクエストのHookには指定しません。
+
+項目を組み合わせた場合は、すべての条件を満たす通信が対象です。配列内の値はいずれかに一致すれば対象になります。たとえば、対象をステータス500〜599に絞るだけなら、`read.metadata`に`status`を含める必要はありません。Hook内で`response.status`を読む場合に、その項目の権限が必要です。
+
+## request.onEnter {#request-onenter}
+
+リクエストをサーバーへ転送する前に呼びます。`read.body.mode`が`json`で、`write.requestBody`が`true`なら、`request.body`のJSONを変更できます。
+
+```ts
+Interceptor.attach(search, {
+  request: {
+    onEnter(request) {
+      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
+      request.body.limit = 5;
+    }
+  }
+});
+```
+
+本文全体を置き換える場合は`request.body = { query: 'example', limit: 5 }`のように代入します。変更がなければ元の本文をそのまま転送します。専用の書き換え関数を用意する必要はありません。
+
+## request.onLeave {#request-onleave}
+
+リクエストの転送が成功した後に呼びます。送信前のHookで変更した場合は、変更後の内容が渡ります。サーバーが受信・処理したことまでは保証しません。転送に失敗した場合は呼びません。
+
+```ts
+Interceptor.attach(search, {
+  request: {
+    onLeave(request, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return { actions: [{
+        type: 'webhook',
+        endpointId,
+        json: { method: request.method!, path: request.path! }
+      }] };
+    }
+  }
+});
+```
+
+入力は読み取り専用です。このHookで本文を変更しようとするとエラーになります。返したアクションは合成テストの結果欄に表示します。実通信では戻り値を保存・送信しません。`type: 'webhook'`という形式を使いますが、外部へのHTTP送信は行いません。
+
+## response.onEnter {#response-onenter}
+
+サーバーのレスポンスをクライアントへ転送する前に呼びます。`read.body.mode`が`json`で、`write.responseBody`が`true`なら、`response.body`のJSONを変更できます。
+
+```ts
+Interceptor.attach(search, {
+  response: {
+    onEnter(response) {
+      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
+      response.body.maintenance = true;
+    }
+  }
+});
+```
+
+`response.request`は参照用です。ここからリクエストを変更することはできません。
+
+## response.onLeave {#response-onleave}
+
+レスポンスの転送が成功した後に呼びます。クライアントへ返した内容を使って結果を作るときに使います。クライアント側での受信・処理の完了までは保証しません。転送に失敗した場合は呼びません。
+
+```ts
+Interceptor.attach(search, {
+  response: {
+    onLeave(response, config) {
+      const endpointId = config.endpoints?.preview;
+      if (!endpointId) return;
+      return { actions: [{
+        type: 'webhook',
+        endpointId,
+        json: { path: response.request.path!, status: response.status! }
+      }] };
+    }
+  }
+});
+```
+
+入力は読み取り専用です。戻り値は合成テストの結果欄で確認できます。実通信では保存・送信されません。
+
+## manifestと権限
+
+新しいプラグインは`schemaVersion: 2`を使います。次のmanifestは[サンプル](examples.md#request-summary)と同じものです。
+
+<<< ../manifests/request-summary.json{json}
+
+`id`は公開後も維持するプラグインのUUID、`version`は変更時に上げるバージョンです。`matches`は1〜16件、ソース内の`attach`は最大16回です。`read`には、処理に必要な情報だけを指定します。
+
+- `metadata`: `method`、`host`、`path`、`status`などの項目
+- `headers`: 読み取るヘッダー名
+- `queryKeys`: 読み取るクエリキー
+- `body.mode`: `none`は本文を渡さず、`json`はJSON本文を渡す
+
+`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
+
+`endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`config.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`config.settings`で参照します。
+
+旧スキーマ1の`onRequest`と`onResponse`は既存パッケージの合成テスト用に残っています。4つのHookを使うソースでは定義しません。スキーマ1のパッケージは実通信では有効にできません。
+
+## 実行条件と制限
+
+各Hookのたびに新しい実行環境でソースを読み込みます。関数の外の変数を使って、`onEnter`から`onLeave`へ状態を引き継ぐことはできません。
+
+実通信でJSON本文を処理する対象は、UTF-8の`application/json`または`+json`で、圧縮されていない24 KiB以下の本文です。圧縮データ、大きな本文、SSE、WebSocketなどへのUpgrade、`Expect: 100-continue`、HEADや本文を持たないレスポンスは本文のHook処理を通さず転送します。接続内の保留データにも64 KiBの上限があります。
+
+スクリプトの例外や時間制限超過では元の通信内容を転送します。利用者が承認を取り消した場合は接続を終了します。実行は同期式で、`fetch`、Promise、タイマー、ファイル操作、NodeやブラウザのAPIは使えません。
+
+1回の実行は50 ms、ヒープ8 MiB、ソース128 KiB、入力64 KiB、設定8 KiB、結果32 KiBまでです。返せるアクションは最大2件です。
 
 ## 型宣言
 
+型宣言は作成時の補助です。入力と権限の検証は実行時にも行います。
+
 <<< ../types/interceptor.d.ts{ts}
-
-## テスト入力
-
-`event` は通信データ、`config` はプラグインへ渡す設定です。シミュレーターの例では次のJSONファイルを使います。
-
-`fixtures/request-event.json`:
-
-<<< ../fixtures/request-event.json{json}
-
-`fixtures/config.json`:
-
-<<< ../fixtures/config.json{json}
-
-`run` コマンドで `onRequest` を指定すると、その関数に2つのJSONオブジェクトを渡します。`phase` は入力JSONに書かれた値です。合成テストではフックの選択と入力JSONをそれぞれ指定します。`phase` に応じて入力項目を追加したり、manifestの条件で削ったりする処理はありません。`event.request` や `event.response` も入力に含めた内容がそのまま渡されます。
-
-`preview` は、このサンプルが使うバインディング名です。`config.endpoints.preview` のテスト用IDを、戻り値の `endpointId` に指定します。合成テストでは実際の送信先を登録する必要はありません。アプリではスクリプト詳細のテスト欄で、フック、入力JSON、設定JSONを編集できます。
-
-## manifestのフィールド
-
-manifestの具体例は [サンプル](examples.md) にあります。
-
-| フィールド | 内容 |
-|---|---|
-| `schemaVersion` | 常に `1` |
-| `id` | プラグインのUUID。公開後は変えません |
-| `name` / `version` | 表示名と、変更ごとに上げるバージョン |
-| `subscriptions` | `phase`（`request.headers`・`request.completed`・`response.headers`・`response.completed`）と `match` |
-| `read` | フックが読める情報の権限（grants） |
-| `endpointBindings` | Webhook送信先の名前 |
-| `settings` | 設定値（サンプルでは空） |
-
-`match` には `hosts`、`methods`、`path`、`status` を指定できます。`path` は `{ "kind": "exact", "value": "/api/items" }` または `{ "kind": "prefix", "value": "/api/" }`、`status` は `min`/`max` の範囲です。合成テストでは `match` が適用されないため、フック内でも同じ条件を判定してください。
-
-## onRequest {#onrequest}
-
-`onRequest(event, config)` は、合成テストでリクエスト用のフックを選ぶと呼ばれる同期関数です。manifestにはrequest系のフェーズを宣言しますが、購読に基づく自動実行は未実装です。`event.request` に含まれるプロパティは入力によって異なります。必要な値が含まれているかを確認し、なければ `{ actions: [] }` を返します。合成テストではmanifestの `match` で入力を絞り込まないため、サンプルのようにフック内でも条件を判定します。戻り値は画面に表示するためのWebhook送信要求です。リクエストの書き換えや転送制御はできません。
-
-<<< ../src/request-summary.ts{ts}
-
-## onResponse {#onresponse}
-
-`onResponse(event, config)` は、合成テストでレスポンス用のフックを選ぶと呼ばれる同期関数です。manifestにはresponse系のフェーズを宣言します。`event.response` についても必要なプロパティがあるかを確認し、ステータスやホストなどの条件をフック内で判定します。戻り値は表示のみに使用され、レスポンスは変更されません。
-
-<<< ../src/server-error-filter.ts{ts}
-
-## 読み取り権限（grants）
-
-`read` で必要なものだけを宣言します。
-
-- `metadata`: `method`、`host`、`path`、`status` など
-- `headers`: 読むヘッダー名の一覧
-- `queryKeys`: 読むクエリキーの一覧
-- `body.mode`: `none` は本文を読みません
-
-現在の `read` は検証・保存の対象となる宣言です。合成テストでは入力JSONをそのまま渡し、この宣言による絞り込みは行いません。実通信を読み取る許可が付与されたことを意味しません。
-
-## エンドポイントのバインディング
-
-`endpointBindings` に宣言した名前に対応する送信先IDは、`config.endpoints[名前]` で参照できます。テストでは `fixtures/config.json` の値を使います。Webhookへの送信要求にはこのIDを `endpointId` として指定してください。値が設定されていない場合は `undefined` になります。

@@ -1,0 +1,13 @@
+{
+  "generator": "D2 0.9.0",
+  "inputs": {
+    "docs/diagrams/http-hooks.d2": "7fac91a8338b7d3a11dc6a08f7c93d0d5ebc4fee3b12137882fe144f292eea7a",
+    "tools/render-hook-diagrams.ts": "40ced5fac436c91833bb26d417abd0a049e41e6bb36b85b60a66436141bec208"
+  },
+  "outputs": {
+    "website/public/diagrams/plugin-hooks-ja-light.svg": "b3f20b8049b849fdb7565934871b0790423c925c55b4ff0131d9e8654b6966c5",
+    "website/public/diagrams/plugin-hooks-ja-dark.svg": "534f5b2d451f504882a3a1f85a6319e431504693496e5782f701d2b3829e0fda",
+    "website/public/diagrams/plugin-hooks-en-light.svg": "059c87b9e492259806046275912389e28c6f6e25b66a026ab9e677b0341016c9",
+    "website/public/diagrams/plugin-hooks-en-dark.svg": "eaa423a5ef1dc4759316fed2bba4e9ab409d47e9b33ed85c54a3c02605ebc3d4"
+  }
+}
