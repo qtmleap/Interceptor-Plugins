@@ -3,6 +3,10 @@ title: Authoring
 lang: en
 ---
 
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
+
 # Authoring
 
 This example changes JSON on `POST https://api.example.com/search` before forwarding a request or response.
@@ -18,6 +22,8 @@ Use `src/NAME.ts` for source, `manifests/NAME.json` for identity, conditions and
 ```sh
 python3 -c 'import uuid; print(uuid.uuid4())'
 ```
+
+<HookFlow locale="en" />
 
 ## Edit JSON {#edit-json}
 

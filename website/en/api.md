@@ -3,7 +3,13 @@ title: API reference
 lang: en
 ---
 
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
+
 # API reference
+
+<HookFlow locale="en" />
 
 ## Interceptor.attach
 

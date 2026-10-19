@@ -3,6 +3,10 @@ title: プラグインを書く
 lang: ja
 ---
 
+<script setup>
+import HookFlow from './.vitepress/components/HookFlow.vue'
+</script>
+
 # プラグインを書く
 
 ここでは`POST https://api.example.com/search`のJSONを変更するプラグインを作ります。ホスト・パス・メソッドを対象条件に指定し、リクエストとレスポンスの転送前に本文を書き換えます。
@@ -20,6 +24,8 @@ LinuxとmacOSで同じコマンドを使えます。Bun %%BUN_VERSION%%、Python
 ```sh
 python3 -c 'import uuid; print(uuid.uuid4())'
 ```
+
+<HookFlow locale="ja" />
 
 ## JSONを変更する {#jsonを変更する}
 

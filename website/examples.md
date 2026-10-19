@@ -3,9 +3,15 @@ title: サンプル
 lang: ja
 ---
 
+<script setup>
+import HookFlow from './.vitepress/components/HookFlow.vue'
+</script>
+
 # サンプル
 
 ソースとmanifestを同じページに載せています。サンプルはいずれもスキーマ2です。テストの入力と期待値は`fixtures/cases.json`にあります。Webhookアクションは合成テストの結果欄で確認するための送信要求です。実通信では戻り値を保存・送信しません。
+
+<HookFlow locale="ja" />
 
 ## Request summary {#request-summary}
 

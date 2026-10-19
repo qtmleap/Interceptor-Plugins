@@ -3,6 +3,10 @@ title: Getting started
 lang: en-US
 ---
 
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
+
 # Getting started
 
 The four hooks require an Interceptor build supporting schema 2 and live HTTP hooks. Import a plugin, test it with synthetic JSON, then approve its exact revision for live use. Plugin development also runs on Linux.
@@ -58,6 +62,8 @@ A synthetic test runs one phase. Selecting a leave phase does not send traffic; 
 ## Use on live traffic
 
 For a schema 2 script, follow these steps. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
+
+<HookFlow locale="en" />
 
 1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
 2. Open **Settings → SSL Proxying List** and add the host declared in the plugin's `hosts` match.

@@ -3,9 +3,15 @@ title: Examples
 lang: en
 ---
 
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
+
 # Examples
 
 Both examples use schema 2. Inputs and expectations are in `fixtures/cases.json`. Returned webhook intents appear in synthetic-test results. Live processing does not save or deliver them.
+
+<HookFlow locale="en" />
 
 ## Request summary {#request-summary}
 

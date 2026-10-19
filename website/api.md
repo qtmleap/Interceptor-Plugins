@@ -3,7 +3,13 @@ title: APIリファレンス
 lang: ja
 ---
 
+<script setup>
+import HookFlow from './.vitepress/components/HookFlow.vue'
+</script>
+
 # APIリファレンス
+
+<HookFlow locale="ja" />
 
 ## Interceptor.attach
 
