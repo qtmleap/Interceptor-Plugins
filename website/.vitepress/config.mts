@@ -41,7 +41,18 @@ function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
   const prefix = locale === 'root' ? '/' : '/en/'
-  return [{ text: locale === 'root' ? 'ドキュメント' : 'Documentation', items: nav(locale) }]
+  const hooks = [
+    ['onRequest', 'onrequest'], ['onResponse', 'onresponse'],
+    ['Interceptor.attach', 'hook-registration'],
+    ['request.onEnter', 'before-request'], ['request.onLeave', 'after-request'],
+    ['response.onEnter', 'before-response'], ['response.onLeave', 'after-response'],
+    ['rewriteJsonBody', 'rewrite-json-body']
+  ]
+  const items = pages.map((page) => ({
+    text: labels[locale][page], link: `${prefix}${page}`,
+    ...(page === 'api' ? { items: hooks.map(([text, anchor]) => ({ text, link: `${prefix}api#${anchor}` })) } : {})
+  }))
+  return [{ text: locale === 'root' ? 'ドキュメント' : 'Documentation', items }]
 }
 
 const searchTranslations = {

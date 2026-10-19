@@ -62,6 +62,10 @@ bun run build             # 未署名の開発用パッケージを build/site/ 
 
 型は [APIリファレンス](api.md) を参照してください。
 
+::: warning 将来の設計
+`Interceptor.attach` / `rewriteJsonBody` は[HTTP Hook設計](api.md#http-hooks)と[将来の例](examples.md#future-http-hooks)にありますが未実装です。現在はコンパイル、テスト、公開できません。
+:::
+
 ## 実行環境の制約
 
 ランタイムは1つのグローバルスクリプトを評価し、フックを同期的に呼びます。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。実行の境界はアプリの制限付きQuickJSです。

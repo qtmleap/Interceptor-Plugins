@@ -62,6 +62,10 @@ This sample assumes the test `preview` binding and input. In a new hook, check t
 
 See the [API reference](api.md) for the types.
 
+::: warning Future design
+`Interceptor.attach` / `rewriteJsonBody` appear in [HTTP Hook design](api.md#http-hooks) and the [future example](examples.md#future-http-hooks) but are unimplemented. They cannot currently be compiled, tested or published.
+:::
+
 ## Runtime limits
 
 The runtime evaluates one global script and calls the hook synchronously. Imports/exports, asynchronous code, promises, TypedArrays, and Node or browser APIs are unavailable. There is no `fetch`, console, filesystem, timer or module loader. Compilation rejects these common constructs, but it is not a security sandbox: the app's bounded QuickJS host is the execution boundary.
