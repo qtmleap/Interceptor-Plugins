@@ -13,7 +13,7 @@ This example changes JSON on `POST https://api.example.com/search` before forwar
 
 ## Tools
 
-Linux and macOS use the same commands. Install Bun %%BUN_VERSION%%, Python 3, OpenSSL, Git, Rust and a C compiler, or use the [dev container](devcontainer.md). Creating, testing and signing plugins does not require Xcode.
+Linux and macOS use the same commands. Install Bun %%BUN_VERSION%%, Python 3, OpenSSL, Git, Rust and a C compiler, or use the [development environment](devcontainer.md). Creating, testing and signing plugins does not require Xcode.
 
 ## Files
 

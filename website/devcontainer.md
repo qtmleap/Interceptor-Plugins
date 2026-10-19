@@ -1,11 +1,9 @@
 ---
-title: 開発コンテナ
+title: 開発環境
 lang: ja
 ---
 
-# 開発コンテナ
-
-`qtmleap/devcontainers` を基に構築した開発環境です。Ubuntu 24.04、Bun %%BUN_VERSION%%、Python 3、OpenSSL、GitHub CLI、Rust、Cコンパイラを含みます。
+# 開発環境
 
 ## 使い方
 

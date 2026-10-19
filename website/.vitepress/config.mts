@@ -23,7 +23,7 @@ const labels = {
     api: 'API',
     examples: 'サンプル',
     publishing: '公開',
-    devcontainer: '開発コンテナー'
+    devcontainer: '開発環境'
   },
   en: {
     'what-is-interceptor': 'What is Interceptor?',
@@ -32,7 +32,7 @@ const labels = {
     api: 'API',
     examples: 'Examples',
     publishing: 'Publishing',
-    devcontainer: 'Dev container'
+    devcontainer: 'Development environment'
   }
 } as const
 

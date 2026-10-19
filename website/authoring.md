@@ -13,7 +13,7 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 ## 必要なツール
 
-LinuxとmacOSで同じコマンドを使えます。Bun %%BUN_VERSION%%、Python 3、OpenSSL、Git、Rust、Cコンパイラを用意してください。[開発コンテナ](devcontainer.md)にも含まれています。プラグインの作成・テスト・署名にXcodeは不要です。
+LinuxとmacOSで同じコマンドを使えます。Bun %%BUN_VERSION%%、Python 3、OpenSSL、Git、Rust、Cコンパイラを用意してください。[開発環境](devcontainer.md)にも含まれています。プラグインの作成・テスト・署名にXcodeは不要です。
 
 ## ファイルの構成
 

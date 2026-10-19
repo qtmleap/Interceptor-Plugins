@@ -1,11 +1,9 @@
 ---
-title: Development container
+title: Development environment
 lang: en-US
 ---
 
-# Development container
-
-A development environment adapted from `qtmleap/devcontainers`. It provides Ubuntu 24.04, Bun %%BUN_VERSION%%, Python 3, OpenSSL, GitHub CLI, Rust and a C compiler.
+# Development environment
 
 ## Use it
 
