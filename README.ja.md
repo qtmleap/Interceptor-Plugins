@@ -4,7 +4,9 @@
 
 ドキュメント: [日本語](https://qtmleap.github.io/Interceptor-Plugins/) / [English](https://qtmleap.github.io/Interceptor-Plugins/en/)
 
-Interceptorの通信にJavaScriptの処理を追加する公式サンプルと、配布リポジトリのテンプレートです。ホスト・パス・メソッドなどで対象を指定し、送信前のリクエストや返却前のレスポンスのJSONを変更できます。転送成功後に呼ぶHookも用意しています。TypeScriptとスキーマ2のmanifestを編集し、アプリと共通のQuickJSで検証して、署名付きパッケージとして配布できます。
+Interceptorの通信にJavaScriptの処理を追加する公式サンプルと、配布リポジトリのテンプレートです。ホスト・パス・メソッドなどで対象を指定し、送信前のリクエストや返却前のレスポンスのJSONを変更できます。転送成功後に呼ぶHookも用意しています。`plugins/NAME/hooks/`にTypeScriptを、`plugins/NAME/plugin.json`にメタデータを記載します。ビルドがスキーマ2のmanifestとJavaScriptを生成します。アプリと共通のQuickJSで検証して、署名付きパッケージとして配布できます。
+
+このガイドで扱うスキーマ2と実通信のHookは開発中です。
 
 ## 公式リポジトリを追加する
 
@@ -26,9 +28,9 @@ https://qtmleap.github.io/Interceptor-Plugins/repository.json
 
 ### Server error filter
 
-`example.com`のステータス500〜599のレスポンスを対象に、`response.onEnter`でJSONに`maintenance: true`を追加し、`response.onLeave`で結果を作ります。ステータスを`200`に変えると対象から外れます。
+`GET https://example.com/`のレスポンスを処理します。Hook内でステータスが500〜599かを確認し、該当する場合だけ`response.onEnter`でJSONに`maintenance: true`を追加し、`response.onLeave`で結果を作ります。ステータスを`200`に変えると本文は変更されず、アクションも返しません。
 
-実通信で使うときは、利用者がソースと権限を確認し、対象のリビジョンを承認します。読み込みや編集だけでは有効になりません。実通信ではアクションを保存・送信しません。[設定手順](website/getting-started.md)と[4つのHookの図・説明](website/index.md)を参照してください。
+実通信で使うときは、利用者がソースと権限を確認し、対象のリビジョンを承認します。読み込みや編集だけでは有効になりません。実通信ではアクションを保存・送信しません。[設定手順](website/getting-started.md)と[4つのHookの図・説明](website/what-is-interceptor.md)を参照してください。
 
 ## コンテナで開発する
 
@@ -45,16 +47,17 @@ bun run check
 
 固定した公開Interceptorソースを取得し、共通のQuickJSブリッジを使うRust製シミュレーターをビルドします。パッケージ生成の再現性、リクエスト・レスポンスの期待値、テスト用の一時鍵による署名と改ざん検出を確認します。公式の秘密鍵は使わず、公開処理も行いません。
 
-編集するソースは `src/*.ts` と `manifests/`、入出力の期待値は `fixtures/` にあります。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/scripts/` と `build/site/` はGit管理対象外の生成物です。Hookの型と実行環境の制約は[作成ガイド](website/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSはそのSHAから取得し、Ed25519の署名にはBunの暗号機能を使います。
+編集するソースは`plugins/NAME/hooks/`、メタデータと権限は`plugins/NAME/plugin.json`、入出力の期待値は`fixtures/`にあります。各ファイルは1引数の`Interceptor.attach({ request: { ... }, response: { ... } })`でHookを定義します。ビルドがファイルの配置とHookの定義から対象条件とファイル参照を生成し、`{manifest, sourceFiles}`をパッケージにまとめます。パッケージ生成時は毎回、型チェックとJavaScriptへの変換を行います。`build/manifests/`、`build/scripts/`、`build/site/`はGit管理対象外の生成物です。Hookの型と実行環境の制約は[作成ガイド](website/authoring.md)を参照してください。実行基盤の固定SHAは `repository-config.json` に記録し、QuickJSはそのSHAから取得し、Ed25519の署名にはBunの暗号機能を使います。
 
 ## シミュレーター
 
 ```sh
-bun run simulator check build/scripts/request-summary.js
-bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/request-event.json fixtures/config.json --manifest manifests/request-summary.json
+bun run build
+bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
+bun run simulator run-package build/site/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
-先に`bun run check`を実行してJavaScriptを生成します。`check`はスクリプトを実行せず構文を検査し、`run`は指定した1つのHookを実行してアクションと本文変更をJSONで返します。ビルドした`.tools/bin/interceptor-simulator`は対象のOS・CPU向けの単体バイナリとして実行できます。詳しくは[作成ガイド](website/authoring.md)を参照してください。
+先に`bun run check`を実行してください。`build`は未署名の開発用パッケージを生成し、出力先の`build/site/`は存在しないか空である必要があります。シミュレーターの`check`はスクリプトを実行せず構文を検査します。`run-package`はパッケージのmanifestから通信条件とHookに合うファイルを選び、アクションと本文変更をJSONで返します。ビルドした`.tools/bin/interceptor-simulator`は対象のOS・CPU向けの単体バイナリとして実行できます。詳しくは[作成ガイド](website/authoring.md)を参照してください。
 
 ## 自分の配布リポジトリを作る
 
@@ -68,7 +71,7 @@ bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/
    ```
 
    セットアップが専用のリポジトリ／プラグインIDと署名鍵を作り、master専用のGitHub EnvironmentにSecretを保存し、Pagesと公開workflowを設定します。既存の保護設定は維持し、不明な鍵・Secretや公式checkoutの上書きは拒否します。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存します。このディレクトリは安全な場所へバックアップしてください。再実行しても同じ鍵とIDを使います。セットアップ自体はcommit・push・配布を行いません。
-3. `src/NAME.ts`、manifest、期待値を編集し、公開用の設定・TypeScript・manifest・テストをcommitしてmasterへpushします。CIが型チェック、変換、実際のQuickJSでの検証、SHA-256の生成、署名、配布を行います。更新ごとの手動署名は不要です。
+3. `plugins/NAME/hooks/`、`plugins/NAME/plugin.json`、期待値を編集します。生成したmanifestやJavaScriptは含めず、公開用の設定・編集したTypeScript・プラグインのメタデータ・テストをcommitしてmasterへpushします。CIが型チェック、変換、実際のQuickJSでの検証、SHA-256の生成、署名、配布を行います。更新ごとの手動署名は不要です。
 4. **Publish signed repository**の公開後検証まで成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリへ登録できます。セットアップ直後のURLは配布予定先です。公開鍵のフィンガープリントは信頼できる別の経路でも案内してください。署名の一致だけでは作者の本人確認はできません。
 
 初回はPages・Environment・Secretを設定するためのGitHub管理権限が必要です。通常のCIトークンだけでは初回の認証設定は行えません。組織の制限がある場合は管理者による設定が必要です。既存リポジトリの設定や復旧は[管理・公開手順](docs/maintaining.md)を参照してください。

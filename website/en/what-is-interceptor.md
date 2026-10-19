@@ -15,12 +15,12 @@ Inspecting HTTPS content requires certificate and target-host configuration. See
 
 ## What are Plugins?
 
-Plugins add JavaScript processing to traffic handled by Interceptor. Choose a host, path and method, then change JSON in matching traffic or run processing after forwarding.
+Plugins add JavaScript processing to traffic handled by Interceptor. Place a file at the location for its host, path and method, then change JSON in matching traffic or run processing after forwarding.
 
 Package your processing as a plugin and load it in Interceptor. You can also sign plugins and share them through a repository.
 
 ::: info
-The live HTTP hooks described in this guide are under development.
+The schema 2 format and live HTTP hooks described in this guide are under development.
 :::
 
 ## Use cases

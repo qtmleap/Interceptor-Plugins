@@ -77,10 +77,26 @@ func loadConfiguration(_ root: String) throws -> Configuration {
     default: throw Fail(message: "repository-config.json: invalid publicKeyFingerprint")
     }
     var ids = Set<UUID>()
-    for name in try directoryNames(root + "/manifests", suffix: ".json") {
-        guard let manifest = try json(root + "/manifests/\(name).json", "manifests/\(name).json").objectValue,
+    var metadataPaths: [String] = []
+    if FileManager.default.fileExists(atPath: root + "/manifests") {
+        metadataPaths += try directoryNames(root + "/manifests", suffix: ".json").map { "manifests/\($0).json" }
+    }
+    if FileManager.default.fileExists(atPath: root + "/plugins") {
+        for name in try FileManager.default.contentsOfDirectory(atPath: root + "/plugins").sorted() where name != ".DS_Store" {
+            var st = stat()
+            let path = root + "/plugins/" + name
+            guard !name.isEmpty, name.utf8.count <= 64,
+                  name.allSatisfy({ $0.isASCII && ($0.isLowercase || $0.isNumber || $0 == "-") }),
+                  lstat(path, &st) == 0, (st.st_mode & S_IFMT) == S_IFDIR else {
+                throw Fail(message: "invalid authored plugin directory: \(name)")
+            }
+            metadataPaths.append("plugins/\(name)/plugin.json")
+        }
+    }
+    for path in metadataPaths {
+        guard let manifest = try json(root + "/" + path, path).objectValue,
               let text = manifest["id"]?.stringValue, let pluginID = UUID(uuidString: text), ids.insert(pluginID).inserted else {
-            throw Fail(message: "manifests/\(name).json: missing or duplicate id")
+            throw Fail(message: "\(path): missing or duplicate id")
         }
     }
     guard !ids.isEmpty else { throw Fail(message: "no manifests") }
@@ -118,11 +134,41 @@ func summary(_ snapshot: VerifiedSnapshot) throws -> String {
 
 // MARK: - samples
 
+func generatedSourceFiles(_ directory: String, root: String) throws -> [String: String] {
+    let boundary = URL(fileURLWithPath: root).standardizedFileURL.path
+    var ancestor = URL(fileURLWithPath: directory).standardizedFileURL
+    guard ancestor.path.hasPrefix(boundary + "/") else { throw Fail(message: "generated sources outside root") }
+    while true {
+        var info = stat()
+        guard lstat(ancestor.path, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR else {
+            throw Fail(message: "\(ancestor.path): generated source ancestor is not a real directory")
+        }
+        if ancestor.path == boundary { break }
+        ancestor.deleteLastPathComponent()
+    }
+    var info = stat()
+    guard lstat(directory, &info) == 0, (info.st_mode & S_IFMT) == S_IFDIR,
+          let entries = FileManager.default.enumerator(atPath: directory) else {
+        throw Fail(message: "\(directory): missing generated sources")
+    }
+    var files: [String: String] = [:]
+    while let relative = entries.nextObject() as? String {
+        let path = directory + "/" + relative
+        guard lstat(path, &info) == 0, (info.st_mode & S_IFMT) != S_IFLNK else { throw Fail(message: "\(path): symlink or unreadable") }
+        if (info.st_mode & S_IFMT) == S_IFDIR { continue }
+        guard (info.st_mode & S_IFMT) == S_IFREG, relative.hasSuffix(".js") else { throw Fail(message: "\(path): unexpected generated input") }
+        let data = try readRegular(path, limit: Limits.source)
+        guard let text = String(data: data, encoding: .utf8) else { throw Fail(message: "\(path): invalid UTF-8") }
+        files[relative] = text
+    }
+    return files
+}
+
 func runSamples(root: String, directory: String) async throws {
     let config = try loadConfiguration(root)
     let configJSON = try readRegular(root + "/fixtures/config.json", limit: JavaScriptLimits.maxConfigBytes)
 
-    var packages = [String: PluginPackage](), manifests = [String: Data]()
+    var packages = [String: PluginPackage]()
     for name in try directoryNames(directory + "/plugins", suffix: ".json") {
         let packageBytes = try readRegular(directory + "/plugins/\(name).json", limit: Limits.package)
         let package: PluginPackage
@@ -130,12 +176,16 @@ func runSamples(root: String, directory: String) async throws {
         catch let error as Fail { throw error }
         catch { throw Fail(message: "plugins/\(name).json: invalid package (\(error))") }
         if package.manifest.schemaVersion == 2 {
-            guard let manifest = try JSONValue(parsing: packageBytes).objectValue?["manifest"] else { throw Fail(message: "plugins/\(name).json: missing manifest") }
-            manifests[name] = try manifest.data()
+            let generated = try generatedSourceFiles(root + "/build/scripts/\(name)", root: root)
+            guard Set(package.sourceFiles.keys) == Set(generated.keys),
+                  package.sourceFiles.allSatisfy({ key, value in generated[key].map { value.utf8.elementsEqual($0.utf8) } == true }) else {
+                throw Fail(message: "plugins/\(name).json: sourceFiles differ from generated scripts")
+            }
+        } else {
+            let scriptDirectory = FileManager.default.fileExists(atPath: root + "/src") ? "build/scripts" : "scripts"
+            let script = try readRegular(root + "/\(scriptDirectory)/\(name).js", limit: Limits.source)
+            guard package.source.map({ Data($0.utf8) == script }) == true else { throw Fail(message: "plugins/\(name).json: source differs from \(scriptDirectory)/\(name).js") }
         }
-        let scriptDirectory = FileManager.default.fileExists(atPath: root + "/src") ? "build/scripts" : "scripts"
-        let script = try readRegular(root + "/\(scriptDirectory)/\(name).js", limit: Limits.source)
-        guard package.source == String(decoding: script, as: UTF8.self) else { throw Fail(message: "plugins/\(name).json: source differs from \(scriptDirectory)/\(name).js") }
         packages[name] = package
     }
     guard Set(packages.values.map(\.manifest.id)) == config.pluginIDs else { throw Fail(message: "packages do not match manifests/") }
@@ -155,20 +205,20 @@ func runSamples(root: String, directory: String) async throws {
         }
         covered.insert(plugin)
         // Schema 2 packages run a lifecycle `phase` with their manifest; schema 1 compatibility cases keep `hook`.
-        let manifestJSON = manifests[plugin]
-        let isV2 = manifestJSON != nil
+        let isV2 = package.manifest.schemaVersion == 2
         guard isV2 ? (fields["hook"] == nil && fields["phase"]?.stringValue != nil)
                    : (fields["phase"] == nil && fields["hook"]?.stringValue != nil) else {
             throw Fail(message: "fixtures/cases.json[\(index)] \(name): schema \(isV2 ? 2 : 1) packages need \(isV2 ? "phase" : "hook")")
         }
         do {
             let output: Data
-            if let manifestJSON {
+            if isV2 {
                 guard let hook = JavaScriptHook(rawValue: fields["phase"]!.stringValue!) else { throw Fail(message: "fixtures/cases.json[\(index)] \(name): unknown phase") }
-                output = try await executor.runV2(source: package.source, hook: hook, eventJSON: try event.data(), configJSON: configJSON, manifestJSON: manifestJSON)
+                output = try await executor.runV2(packageJSON: package.bytes, hook: hook, eventJSON: try event.data(), configJSON: configJSON)
             } else {
                 guard let hook = JavaScriptHook(rawValue: fields["hook"]!.stringValue!) else { throw Fail(message: "fixtures/cases.json[\(index)] \(name): unknown hook") }
-                output = try await executor.run(source: package.source, hook: hook, eventJSON: try event.data(), configJSON: configJSON)
+                guard let source = package.source else { throw Fail(message: "legacy package has no source") }
+                output = try await executor.run(source: source, hook: hook, eventJSON: try event.data(), configJSON: configJSON)
             }
             if hasError { failures.append("\(name): expected \(fields["expectError"]?.stringValue ?? "error"), got result \(String(decoding: output, as: UTF8.self))") }
             else if try JSONValue(parsing: output) != fields["expected"]! {

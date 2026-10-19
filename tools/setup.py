@@ -21,7 +21,7 @@ from pathlib import Path
 from repository_config import (OFFICIAL_REPOSITORY, ToolError, check_fingerprint, check_repository,
                                dump_json, load_config, load_manifests, load_reserved, new_uuid,
                                parse_json_object, read_regular, run_main, same_repository, validate_config,
-                               validate_manifest)
+                               validate_manifest, require_exact_keys)
 
 ENVIRONMENT = 'github-pages'
 SECRET = 'INTERCEPTOR_REPOSITORY_KEY_B64'
@@ -255,7 +255,8 @@ def template_files(root, repository, url):
     for name, manifest in manifests:
         manifest = dict(manifest, id=new_uuid(taken))
         taken.add(manifest['id'])
-        files[f'manifests/{name}.json'] = manifest
+        target = f'plugins/{name}/plugin.json' if manifest['schemaVersion'] == 2 else f'manifests/{name}.json'
+        files[target] = manifest
     files['repository-config.json'] = validate_config(config)
     for name in files:
         originals[name] = digest(read_regular(root / name))
@@ -269,12 +270,29 @@ def check_files(root, state, *, apply=False):
     if 'repository-config.json' not in state['files']:
         raise ToolError('invalid setup checkpoint configuration')
     for name, value in state['files'].items():
-        if name != 'repository-config.json' and not re.fullmatch(r'manifests/[a-z0-9]+(?:-[a-z0-9]+)*\.json', name):
+        is_authored = bool(re.fullmatch(r'plugins/[a-z0-9]+(?:-[a-z0-9]+)*/plugin\.json', name))
+        if name != 'repository-config.json' and not is_authored and not re.fullmatch(r'manifests/[a-z0-9]+(?:-[a-z0-9]+)*\.json', name):
             raise ToolError('invalid setup checkpoint path')
+        walk = root
+        for part in Path(name).parts:
+            walk = walk / part
+            if walk.is_symlink():
+                raise ToolError('setup checkpoint path must not cross a symlink')
         if name == 'repository-config.json':
             validate_config(value)
+        elif is_authored:
+            required = ('schemaVersion', 'id', 'name', 'version', 'read', 'write', 'endpointBindings', 'settings')
+            optional = tuple(key for key in ('author', 'summary') if isinstance(value, dict) and key in value)
+            require_exact_keys(value, required + optional, name)
+            if value['schemaVersion'] != 2:
+                raise ToolError('authored plugin checkpoint requires schemaVersion 2')
+            route = {'hosts': ['example.com'], 'methods': ['GET'], 'path': {'kind': 'exact', 'value': '/'},
+                     'hooks': {'request': {'onEnter': 'hooks/example.com/GET.js'}}}
+            validate_manifest(dict(value, matches=[route]), name)
         else:
             validate_manifest(value, name)
+            if value['schemaVersion'] != 1:
+                raise ToolError('legacy manifest checkpoints require schemaVersion 1')
         raw = read_regular(root / name)
         target = dump_json(value)
         if raw != target and (state.get('configured') or digest(raw) != state['originals'][name]):

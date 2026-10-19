@@ -1,4 +1,4 @@
-"""Runtime-facing simulator CLI cases for schema 2 (`--manifest`) plus the preserved schema 1 conformance suite.
+"""Runtime-facing simulator CLI cases for schema 2 (`run-package`) plus the preserved schema 1 conformance suite.
 
 Needs the Rust simulator built against the new pin (tools/build-runtime.sh); skipped-free on purpose: a missing binary fails.
 Cases whose exact exit status belongs to the C runtime assert only "rejected" (non-zero, no stdout result).
@@ -18,7 +18,7 @@ sys.path.insert(0, str(ROOT / 'tools'))
 
 ENTER = 'request.onEnter'
 SOURCE = """
-Interceptor.attach({ hosts: ['api.example.com'], methods: ['POST'], path: { kind: 'exact', value: '/search' } }, {
+Interceptor.attach({
   request: { onEnter(request) { request.body.limit = 5; } }
 });
 """
@@ -26,11 +26,18 @@ LEAVE_MUTATES = SOURCE.replace('onEnter', 'onLeave')
 
 
 class SimulatorCompatTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from repository_config import load_samples
+        cls.samples = {name: {'manifest': manifest, 'sourceFiles': files} for name, manifest, files in load_samples(ROOT)}
+
     def setUp(self):
         self.assertTrue(BINARY.is_file(), 'build the Rust simulator with tools/build-runtime.sh')
         self.dir = Path(tempfile.mkdtemp(prefix='sim-compat-'))
         self.addCleanup(lambda: __import__('shutil').rmtree(self.dir, ignore_errors=True))
-        self.manifest = json.loads((ROOT / 'manifests/request-summary.json').read_text())
+        self.manifest = copy.deepcopy(self.samples['request-summary']['manifest'])
+        self.file = next(iter(self.manifest['matches'][0]['hooks']['request'].values()))
+        self.manifest['matches'][0]['hooks'] = {'request': {'onEnter': self.file}}
         self.event = json.loads((ROOT / 'fixtures/request-event.json').read_text())
         self.config = json.loads((ROOT / 'fixtures/config.json').read_text())
 
@@ -39,12 +46,13 @@ class SimulatorCompatTests(unittest.TestCase):
         path.write_text(value if isinstance(value, str) else json.dumps(value))
         return path
 
-    def run_v2(self, source=SOURCE, phase=ENTER, event=None, manifest=None, manifest_path=None, config=None):
-        args = [self.write('s.js', source), phase, self.write('e.json', self.event if event is None else event),
+    def run_v2(self, source=SOURCE, phase=ENTER, event=None, manifest=None, package_path=None, config=None, files=None):
+        manifest = self.manifest if manifest is None else manifest
+        package = {'manifest': manifest, 'sourceFiles': {self.file: source} if files is None else files}
+        args = [package_path or self.write('p.json', package), phase,
+                self.write('e.json', self.event if event is None else event),
                 self.write('c.json', self.config if config is None else config)]
-        manifest_path = manifest_path or self.write('m.json', self.manifest if manifest is None else manifest)
-        return subprocess.run([str(BINARY), 'run', *map(str, args), '--manifest', str(manifest_path)],
-                              capture_output=True, timeout=10)
+        return subprocess.run([str(BINARY), 'run-package', *map(str, args)], capture_output=True, timeout=10)
 
     def assertRejected(self, result):
         self.assertNotEqual(result.returncode, 0, result.stdout)
@@ -76,15 +84,15 @@ class SimulatorCompatTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout), {'actions': []})
 
-    def test_missing_manifest_file_is_a_usage_error(self):
-        result = self.run_v2(manifest_path=self.dir / 'absent.json')
+    def test_missing_package_file_is_a_usage_error(self):
+        result = self.run_v2(package_path=self.dir / 'absent.json')
         self.assertEqual(result.returncode, 4, result.stderr)
         self.assertEqual(result.stdout, b'')
 
-    def test_manifest_must_be_a_strict_json_object(self):
+    def test_package_must_be_a_strict_json_object(self):
         for text in ('', '[]', '1', 'null', '{"a":1,"a":2}', '{"a":'):
             with self.subTest(text=text):
-                self.assertEqual(self.run_v2(manifest=text).returncode, 4)
+                self.assertEqual(self.run_v2(package_path=self.write('bad.json', text)).returncode, 4)
 
     def test_invalid_manifest_content_is_rejected(self):
         broken = {k: v for k, v in self.manifest.items() if k != 'matches'}
@@ -92,7 +100,7 @@ class SimulatorCompatTests(unittest.TestCase):
         self.assertRejected(self.run_v2(manifest=dict(self.manifest, schemaVersion=3)))
         self.assertRejected(self.run_v2(manifest=dict(self.manifest, matches=[])))
 
-    def test_unknown_phase_and_legacy_hook_with_manifest_are_usage_errors(self):
+    def test_unknown_phase_and_legacy_hook_with_package_are_usage_errors(self):
         for phase in ('request.completed', 'onRequest', 'request.onenter', ''):
             with self.subTest(phase=phase):
                 self.assertEqual(self.run_v2(phase=phase).returncode, 4)
@@ -110,13 +118,39 @@ class SimulatorCompatTests(unittest.TestCase):
     def test_leave_mutation_is_rejected(self):
         event = copy.deepcopy(self.event)
         event['phase'] = 'request.onLeave'
-        self.assertRejected(self.run_v2(source=LEAVE_MUTATES, phase='request.onLeave', event=event))
+        manifest = copy.deepcopy(self.manifest)
+        manifest['matches'][0]['hooks'] = {'request': {'onLeave': self.file}}
+        self.assertRejected(self.run_v2(source=LEAVE_MUTATES, phase='request.onLeave', event=event, manifest=manifest))
+
+    def test_miss_does_not_evaluate_any_source(self):
+        event = copy.deepcopy(self.event)
+        event['request']['host'] = 'other.example.com'
+        result = self.run_v2(source='throw new Error("must not run");', event=event)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {'actions': []})
+
+    def test_miss_still_validates_complete_package(self):
+        event = copy.deepcopy(self.event)
+        event['request']['host'] = 'other.example.com'
+        for files in ({}, {self.file: SOURCE, '../bad.js': ''}, {self.file: 3}):
+            with self.subTest(files=files):
+                self.assertRejected(self.run_v2(files=files, event=event))
+
+    def test_only_manifest_selected_file_runs(self):
+        manifest = copy.deepcopy(self.manifest)
+        route = copy.deepcopy(manifest['matches'][0])
+        route['path']['value'] = '/other'
+        route['hooks'] = {'request': {'onEnter': 'other.js'}}
+        manifest['matches'].append(route)
+        result = self.run_v2(manifest=manifest, files={self.file: SOURCE, 'other.js': 'throw new Error("must not run");'})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['mutation']['body']['limit'], 5)
+
+    def test_phase_mismatch_and_old_two_argument_attach_are_rejected(self):
+        self.assertRejected(self.run_v2(source=SOURCE.replace('onEnter', 'onLeave')))
+        self.assertRejected(self.run_v2(source="Interceptor.attach('search', {request:{onEnter(req){}}});"))
 
     def test_published_leave_samples_accept_live_empty_endpoint_map(self):
-        compiled = subprocess.run(['bun', str(ROOT / 'tools/compile.mjs'), str(ROOT)],
-                                  capture_output=True, text=True, timeout=30)
-        self.assertEqual(compiled.returncode, 0, compiled.stderr)
-        sources = json.loads(compiled.stdout)
         for plugin, phase in (('request-summary', 'request.onLeave'),
                               ('request-summary', 'response.onLeave'),
                               ('server-error-filter', 'response.onLeave')):
@@ -124,11 +158,10 @@ class SimulatorCompatTests(unittest.TestCase):
                 event = copy.deepcopy(self.event)
                 event['phase'] = phase
                 event['response'] = {'status': 503, 'body': {'ok': True}}
-                manifest = json.loads((ROOT / f'manifests/{plugin}.json').read_text())
                 if plugin == 'server-error-filter':
-                    event['request']['host'] = 'example.com'
-                result = self.run_v2(source=sources[plugin], phase=phase, event=event,
-                                     manifest=manifest, config={'settings': {}, 'endpoints': {}})
+                    event['request'].update(host='example.com', path='/', method='GET')
+                result = self.run_v2(phase=phase, event=event, manifest=self.samples[plugin]['manifest'],
+                                     files=self.samples[plugin]['sourceFiles'], config={'settings': {}, 'endpoints': {}})
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(json.loads(result.stdout), {'actions': []})
 

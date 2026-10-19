@@ -356,3 +356,63 @@ class SetupTests(Case):
             initialize.return_value = {'url': 'https://alice.github.io/plugins/repository.json', 'fingerprint': 'a' * 64}
             setup_tool.main(['--root', str(self.tmp / 'absent')])
             initialize.assert_called_once()
+
+class RoutedSetupTests(Case):
+    """Authored route metadata needs no generated manifest or compiled scripts during setup."""
+    fixture = SetupTests.fixture
+    setup = SetupTests.setup
+
+    def routed_fixture(self):
+        root, state, api, keys = self.fixture()
+        import shutil
+        for folder in ('scripts', 'manifests'):
+            shutil.rmtree(root / folder)
+        plugin = root / 'plugins' / 'route-example'
+        hooks = plugin / 'hooks' / 'api.example.com' / 'search'
+        hooks.mkdir(parents=True)
+        metadata = {'schemaVersion': 2, 'id': OFFICIAL_PLUGIN_IDS[0], 'name': 'Route example', 'version': '1.0.0',
+                    'read': {'metadata': [], 'headers': [], 'queryKeys': [], 'body': {'mode': 'json'}},
+                    'write': {'requestBody': True, 'responseBody': False}, 'endpointBindings': [], 'settings': {}}
+        (plugin / 'plugin.json').write_text(json.dumps(metadata))
+        (hooks / 'POST.ts').write_text('Interceptor.attach({request:{onEnter(req){req.body.limit=5;}}});')
+        return root, state, api, keys, plugin
+
+    def test_routed_setup_saves_only_authored_metadata_and_resumes(self):
+        root, state, api, keys, plugin = self.routed_fixture()
+        source = (plugin / 'hooks/api.example.com/search/POST.ts').read_bytes()
+        self.setup(root, state, api, keys)
+        checkpoint = json.loads((state / 'setup-state.json').read_text())
+        self.assertEqual(set(checkpoint['files']), {'repository-config.json', 'plugins/route-example/plugin.json'})
+        metadata = json.loads((plugin / 'plugin.json').read_text())
+        self.assertNotEqual(metadata['id'], OFFICIAL_PLUGIN_IDS[0])
+        self.assertNotIn('matches', metadata)
+        self.assertFalse((root / 'build').exists())
+        self.assertEqual((plugin / 'hooks/api.example.com/search/POST.ts').read_bytes(), source)
+        before = tree_digest(root)
+        self.setup(root, state, api, keys)
+        self.assertEqual(tree_digest(root), before)
+        self.assertEqual(keys.created, 1)
+
+    def test_routed_checkpoint_rejects_generated_routing_fields(self):
+        root, state, api, keys, plugin = self.routed_fixture()
+        files, originals = setup_tool.template_files(root, REPOSITORY, URL)
+        files['plugins/route-example/plugin.json']['matches'] = []
+        before = tree_digest(root)
+        with self.assertRaises(ToolError):
+            setup_tool.check_files(root, {'files': files, 'originals': originals}, apply=True)
+        self.assertEqual(tree_digest(root), before)
+
+    def test_routed_checkpoint_rejects_symlink_ancestor_and_wrong_schema(self):
+        root, state, api, keys, plugin = self.routed_fixture()
+        files, originals = setup_tool.template_files(root, REPOSITORY, URL)
+        candidate = copy.deepcopy(files)
+        candidate['plugins/route-example/plugin.json']['schemaVersion'] = 1
+        with self.assertRaises(ToolError):
+            setup_tool.check_files(root, {'files': candidate, 'originals': originals}, apply=True)
+        external = self.tmp / 'external-plugin'
+        plugin.rename(external)
+        plugin.symlink_to(external, target_is_directory=True)
+        before = (external / 'plugin.json').read_bytes()
+        with self.assertRaisesRegex(ToolError, 'symlink'):
+            setup_tool.check_files(root, {'files': files, 'originals': originals}, apply=True)
+        self.assertEqual((external / 'plugin.json').read_bytes(), before)

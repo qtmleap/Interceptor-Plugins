@@ -203,7 +203,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -234,7 +234,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -269,7 +269,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 500,
@@ -301,7 +301,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 599,
@@ -333,7 +333,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 499,
@@ -356,7 +356,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 600,
@@ -377,7 +377,7 @@
       "request": {
         "method": "GET",
         "host": "example.org",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -400,7 +400,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic",
+        "path": "/",
         "body": {}
       }
     },
@@ -590,7 +590,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -613,7 +613,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -636,7 +636,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503,
@@ -659,7 +659,7 @@
       "request": {
         "method": "GET",
         "host": "example.com",
-        "path": "/synthetic"
+        "path": "/"
       },
       "response": {
         "status": 503

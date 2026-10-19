@@ -19,7 +19,7 @@ lang: ja
    ```
 
    セットアップでは専用のID、Gitの管理対象外に置く署名鍵、master専用のGitHub EnvironmentのSecret、GitHub Actionsを使ったPagesへの公開を設定します。commit・push・配布は行いません。秘密鍵と再開用の記録は `~/.config/interceptor/repositories/OWNER--NAME/` に保存されます。バックアップしてください。
-3. `src/NAME.ts`、manifest、期待値を編集し、公開用の設定を含めてcommitし、`master` へpushします。
+3. `plugins/NAME/hooks/`以下のTypeScript、`plugins/NAME/plugin.json`、`fixtures/cases.json`を編集します。生成したmanifestやJavaScriptは含めず、編集したファイルと公開用の設定をcommitし、`master`へpushします。
 4. **Publish signed repository** の公開後検証が成功したら、表示された `https://OWNER.github.io/REPO/repository.json` をアプリに登録します。それまでのURLは配布予定先です。
 
 セットアップはリポジトリとプラグインのID、配布URL、公開鍵のフィンガープリントを設定ファイルへ書き込みます。これらの公開情報もcommitの対象にしてください。組織の権限や追加の保護設定がある場合は、その要件も満たす必要があります。

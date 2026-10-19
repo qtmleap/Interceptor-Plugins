@@ -13,7 +13,7 @@ V2 = {
     "id": "90A213C0-9D3C-47F5-ABB8-C15C7472E2AE",
     "name": "Search limiter",
     "version": "2.0.0",
-    "matches": [{"hosts": ["api.example.com"], "methods": ["POST"], "path": {"kind": "exact", "value": "/search"}}],
+    "matches": [{"hosts": ["api.example.com"], "methods": ["POST"], "path": {"kind": "exact", "value": "/search"}, "hooks": {"request": {"onEnter": "hooks/api.example.com/search/POST.js"}}}],
     "read": {"metadata": ["host"], "headers": [], "queryKeys": [], "body": {"mode": "json"}},
     "write": {"requestBody": True, "responseBody": False},
     "endpointBindings": ["preview"],
@@ -36,7 +36,7 @@ class HTTPHookManifestTests(unittest.TestCase):
         config.validate_manifest(v2(), 'manifest')
         config.validate_manifest(v2(read={"metadata": [], "headers": ["content-type"], "queryKeys": ["q"], "body": {"mode": "none"}},
                                     write={"requestBody": False, "responseBody": False}), 'manifest')
-        config.validate_manifest(v2(matches=[{"hosts": ["a.example.com"], "status": {"min": 500, "max": 599}}] * 16), 'manifest')
+        config.validate_manifest(v2(matches=[dict(V2["matches"][0], hosts=["a.example.com"])] * 16), 'manifest')
 
     def test_optional_publisher_text_matches_native_manifest_fields(self):
         config.validate_manifest(v2(author='Example author', summary='Changes search JSON.'), 'manifest')
@@ -61,6 +61,38 @@ class HTTPHookManifestTests(unittest.TestCase):
                         [dict(match, path={"kind": "glob", "value": "/*"})], [dict(match, status={"min": 600, "max": 700})]):
             with self.subTest(matches=matches):
                 self.rejects(v2(matches=matches))
+
+    def test_v2_routes_require_one_exact_target_and_named_phase_files(self):
+        match = V2["matches"][0]
+        bad = [dict(match, hosts=["api.example.com", "other.example.com"]),
+               dict(match, methods=["GET", "POST"]),
+               dict(match, path={"kind": "prefix", "value": "/"}),
+               dict(match, hooks={}), dict(match, hooks={"request": {}}),
+               dict(match, hooks={"request": {"onEnd": "a.js"}}),
+               dict(match, hooks={"request": {"onEnter": "../a.js"}})]
+        for route in bad:
+            with self.subTest(route=route):
+                self.rejects(v2(matches=[route]))
+
+    def test_package_source_references_are_exact(self):
+        import repository_tool as tool
+        valid = {"hooks/api.example.com/search/POST.js": "Interceptor.attach({request:{onEnter(req){}}});"}
+        for files in ({}, {"other.js": ""}, dict(valid, extra=""),
+                      {next(iter(valid)): 1}, {next(iter(valid)): "\x00"}):
+            with self.subTest(files=files):
+                with self.assertRaises(config.ToolError):
+                    tool.validate_package(json.dumps({"manifest": v2(), "sourceFiles": files}).encode())
+        with self.assertRaises(config.ToolError):
+            tool.validate_package(json.dumps({"manifest": v2(), "source": ""}).encode())
+
+    def test_source_ids_use_same_safe_ascii_rules_as_native(self):
+        import repository_tool as tool
+        manifest = v2()
+        manifest['matches'][0]['hooks'] = {'request': {'onEnter': 'handler'}}
+        package = tool.validate_package(config.package_bytes(manifest, {'handler': 'Interceptor.attach({request:{onEnter(req){}}});'}))
+        self.assertEqual(set(package['sourceFiles']), {'handler'})
+        for path in ('', '/handler', '../handler', 'a//b', 'a/../b', 'a\\b', 'https://x', 'a%20b', 'あ'):
+            self.assertFalse(config.valid_source_path(path), path)
 
     def test_write_grants_are_exact_booleans(self):
         for write in ({"requestBody": True}, {"requestBody": 1, "responseBody": False},
@@ -89,7 +121,7 @@ class HTTPHookManifestTests(unittest.TestCase):
 
     def test_validate_package_accepts_v2(self):
         import repository_tool as tool
-        data = config.package_bytes(v2(), 'Interceptor.attach({hosts:["api.example.com"]},{});')
+        data = config.package_bytes(v2(), {"hooks/api.example.com/search/POST.js": "Interceptor.attach({request:{onEnter(req){}}});"})
         package = tool.validate_package(data)
         self.assertEqual(package["manifest"]["schemaVersion"], 2)
 

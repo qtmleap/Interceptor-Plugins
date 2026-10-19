@@ -9,7 +9,7 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 # Examples
 
-Both examples use schema 2. Inputs and expectations are in `fixtures/cases.json`. Returned webhook intents appear in synthetic-test results. Live processing does not save or deliver them.
+Each example contains an authored TypeScript file and a `plugin.json` for metadata and permissions. Both use the schema 2 format under development. Inputs and expectations are in `fixtures/cases.json`. Returned webhook intents appear in synthetic-test results. Live processing does not save or deliver them.
 
 <HookFlow locale="en" />
 
@@ -17,16 +17,20 @@ Both examples use schema 2. Inputs and expectations are in `fixtures/cases.json`
 
 Targets `POST api.example.com/search`. `request.onEnter` changes `limit` to `5`; `response.onEnter` adds `maintenance: true`. The leave callbacks build intents from the forwarded data.
 
-<<< ../../src/request-summary.ts{ts}
+`plugins/request-summary/hooks/api.example.com/search/POST.ts`
 
-<<< ../../manifests/request-summary.json{json}
+<<< ../../plugins/request-summary/hooks/api.example.com/search/POST.ts{ts}
 
-Place all four callbacks in one `attach`, or arrange calls by processing task. Each match must equal a manifest entry.
+<<< ../../plugins/request-summary/plugin.json{json}
+
+This file defines all four callbacks in one `Interceptor.attach` call. To handle another API, add a file at its corresponding location under the same plugin’s `hooks/` directory. The build generates the target conditions and file references.
 
 ## Server error filter {#server-error-filter}
 
-Targets 5xx responses from `example.com`. Matching checks the status before callbacks, so the callback needs no duplicate status guard. It adds `maintenance: true` before forwarding and returns a host/status intent afterward.
+Handles responses to `GET https://example.com/`. The file location selects the host, path and method; the callbacks check for a 5xx status. Only those responses receive `maintenance: true` before forwarding and produce a host/status test action afterward.
 
-<<< ../../src/server-error-filter.ts{ts}
+`plugins/server-error-filter/hooks/example.com/GET.ts`
 
-<<< ../../manifests/server-error-filter.json{json}
+<<< ../../plugins/server-error-filter/hooks/example.com/GET.ts{ts}
+
+<<< ../../plugins/server-error-filter/plugin.json{json}

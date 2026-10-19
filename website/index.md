@@ -24,7 +24,7 @@ features:
       width: 24
       height: 24
     title: 条件に合う通信を処理
-    details: ホスト・パス・メソッドで対象を指定できます。条件に一致した通信だけがHookに渡されるため、JavaScriptに同じ条件判定を書く必要はありません。
+    details: ファイルの配置でホスト・パス・メソッドを指定できます。条件に一致した通信だけがHookに渡されるため、JavaScriptに同じ条件判定を書く必要はありません。
     link: /api
   - icon:
       src: /icons/json.svg

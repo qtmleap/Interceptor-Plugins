@@ -355,11 +355,18 @@ def validate_package(data, entry=None, what="package"):
     if not data or len(data) > MAX_PACKAGE:
         raise ToolError(f"{what}: empty or larger than {MAX_PACKAGE} bytes")
     package = strict_json(data)
-    require_exact_keys(package, ("manifest", "source"), what)
-    if not isinstance(package["source"], str) or len(package["source"].encode("utf-8")) > MAX_SOURCE:
-        raise ToolError(f"{what}: invalid source")
-    validate_manifest(package["manifest"], what)
-    manifest = package["manifest"]
+    if not isinstance(package, dict) or not isinstance(package.get('manifest'), dict):
+        raise ToolError(f'{what}: invalid package')
+    manifest = package['manifest']
+    validate_manifest(manifest, what)
+    if manifest['schemaVersion'] == 2:
+        from repository_config import validate_source_files
+        require_exact_keys(package, ('manifest', 'sourceFiles'), what)
+        validate_source_files(manifest, package['sourceFiles'], what)
+    else:
+        require_exact_keys(package, ('manifest', 'source'), what)
+        if not isinstance(package['source'], str) or len(package['source'].encode('utf-8')) > MAX_SOURCE:
+            raise ToolError(f'{what}: invalid source')
     stack = [(manifest["settings"], 1)]
     while stack:
         value, depth = stack.pop()
@@ -481,15 +488,8 @@ def build_envelope(entries, repository_id, name, sequence, issued, seed=None):
 def load_configuration(root):
     root = Path(root)
     config = load_config(root)
-    names = _list_dir(root / "manifests", ".json", "manifests")
-    ids = set()
-    for name, path in names.items():
-        manifest = load_json(path, f"manifests/{name}.json")
-        validate_manifest(manifest, f"manifests/{name}.json")
-        identifier = manifest["id"].upper()
-        if identifier in ids:
-            raise ToolError(f"manifests/{name}.json: duplicate id")
-        ids.add(identifier)
+    from repository_config import load_manifests
+    ids = {manifest['id'].upper() for _, manifest in load_manifests(root)}
     if not ids:
         raise ToolError("no manifests")
     return {"id": check_uuid(config["id"], "id"), "url": config["repositoryURL"],
@@ -511,7 +511,7 @@ def check_identity(snapshot, config, require_signed):
 def check_plugin_set(snapshot, config):
     ids = [entry["id"] for entry in snapshot["index"]["plugins"]]
     if set(ids) != config["plugins"] or len(ids) != len(config["plugins"]):
-        raise ToolError("feed plugin ids do not match manifests/")
+        raise ToolError("feed plugin ids do not match authored plugin metadata")
 
 
 def summary(snapshot):
@@ -681,21 +681,17 @@ def simulator_binary():
 _PHASE_NAMES = ("request.onEnter", "request.onLeave", "response.onEnter", "response.onLeave")
 
 
-def run_hook(binary, directory, source, hook, event, config, manifest=None):
-    """Returns (exit code, stdout). Files are private temporaries; nothing is sent anywhere.
-
-    A manifest selects the schema 2 route (`run SOURCE PHASE EVENT CONFIG --manifest MANIFEST`).
-    """
-    files = [("source.js", source), ("event.json", event), ("config.json", config)]
-    if manifest is not None:
-        files.append(("manifest.json", manifest))
+def run_hook(binary, directory, source, hook, event, config, package=None):
+    """Run legacy source or a complete schema 2 package using private temporary input files."""
+    files = [("event.json", event), ("config.json", config)]
+    input_name = "package.json" if package is not None else "source.js"
+    files.append((input_name, package if package is not None else source))
     paths = {}
     for name, data in files:
         paths[name] = Path(directory) / name
         paths[name].write_bytes(data)
-    command = [str(binary), "run", str(paths["source.js"]), hook, str(paths["event.json"]), str(paths["config.json"])]
-    if manifest is not None:
-        command += ["--manifest", str(paths["manifest.json"])]
+    command = [str(binary), "run-package" if package is not None else "run", str(paths[input_name]), hook,
+               str(paths["event.json"]), str(paths["config.json"])]
     try:
         proc = subprocess.run(command, capture_output=True, timeout=RUN_TIMEOUT)
     except (OSError, subprocess.SubprocessError) as error:
@@ -704,12 +700,12 @@ def run_hook(binary, directory, source, hook, event, config, manifest=None):
 
 
 def _case_route(case, package, index):
-    """(hook argument, manifest bytes or None). Schema 2 packages use `phase`; schema 1 uses the legacy `hook`."""
+    """(hook argument, full package bytes or None). Schema 2 uses phase; schema 1 retains legacy hook."""
     version = package["manifest"]["schemaVersion"]
     if version == 2:
         if "hook" in case or case.get("phase") not in _PHASE_NAMES:
             raise ToolError(f"fixtures/cases.json[{index}]: schema 2 cases need a lifecycle phase and no hook")
-        return case["phase"], canonical(package["manifest"])
+        return case["phase"], canonical(package)
     if "phase" in case or case.get("hook") not in ("request", "response"):
         raise ToolError(f"fixtures/cases.json[{index}]: schema 1 compatibility cases need hook request|response")
     return ("onRequest" if case["hook"] == "request" else "onResponse"), None
@@ -769,20 +765,52 @@ def legacy_samples(root):
     return f"legacy v1 samples ok: {len(cases)} cases, {len(sources)} sources"
 
 
+def generated_sources(directory, root):
+    """Read the exact generated source map, rejecting symlink ancestors and unexpected file types."""
+    directory = Path(directory)
+    for ancestor in (directory, *directory.parents):
+        if ancestor.is_symlink():
+            raise ToolError(f"generated scripts cross a symlink: {directory}")
+        if ancestor == Path(root):
+            break
+    if not directory.is_dir():
+        raise ToolError(f"generated scripts directory is missing: {directory}")
+    result = {}
+    def walk_error(error):
+        raise ToolError(f"cannot read generated scripts: {error}")
+    for current, dirs, files in os.walk(directory, followlinks=False, onerror=walk_error):
+        for name in dirs:
+            if (Path(current) / name).is_symlink():
+                raise ToolError(f"symlink in generated scripts: {name}")
+        for name in files:
+            path = Path(current) / name
+            try:
+                result[path.relative_to(directory).as_posix()] = read_regular(path, MAX_SOURCE).decode("utf-8")
+            except UnicodeDecodeError:
+                raise ToolError(f"generated script is not UTF-8: {path}") from None
+    return result
+
+
 def samples(root, directory):
     root, directory = Path(root), Path(directory)
     config = load_configuration(root)
     config_json = read_regular(root / "fixtures" / "config.json", MAX_CONFIG)
-    script_directory = "build/scripts" if (root / "src").exists() else "scripts"
     packages = {}
     for name in directory_names(directory / "plugins", ".json"):
         package = validate_package(read_regular(directory / "plugins" / f"{name}.json", MAX_PACKAGE), what=f"plugins/{name}.json")
-        script = read_regular(root / script_directory / f"{name}.js", MAX_SOURCE)
-        if package["source"] != script.decode("utf-8", "replace"):
-            raise ToolError(f"plugins/{name}.json: source differs from {script_directory}/{name}.js")
+        if package["manifest"]["schemaVersion"] == 2:
+            script_directory = "build/scripts"
+            scripts = generated_sources(root / script_directory / name, root)
+            if package["sourceFiles"] != scripts:
+                raise ToolError(f"plugins/{name}.json: sourceFiles differ from {script_directory}/{name}/")
+        else:
+            script_directory = "build/scripts" if (root / "src").exists() else "scripts"
+            script = read_regular(root / script_directory / f"{name}.js", MAX_SOURCE)
+            if package["source"].encode("utf-8") != script:
+                raise ToolError(f"plugins/{name}.json: source differs from {script_directory}/{name}.js")
         packages[name] = package
     if {package["manifest"]["id"].upper() for package in packages.values()} != config["plugins"]:
-        raise ToolError("packages do not match manifests/")
+        raise ToolError("packages do not match authored plugin metadata")
     cases = strict_json(read_regular(root / "fixtures" / "cases.json"))
     if not isinstance(cases, list) or not cases:
         raise ToolError("fixtures/cases.json: expected a non-empty array")
@@ -799,10 +827,10 @@ def samples(root, directory):
             if has_expected == has_error or not set(case) <= {"name", "plugin", "hook", "phase", "event", "expected", "expectError"}:
                 raise ToolError(f"fixtures/cases.json[{index}] {name}: needs exactly one of expected / expectError")
             package = packages[case["plugin"]]
-            hook, manifest = _case_route(case, package, index)
+            hook, routed_package = _case_route(case, package, index)
             covered.add(case["plugin"])
-            code, output = run_hook(binary, temporary, package["source"].encode("utf-8"), hook, canonical(case["event"]),
-                                    config_json, manifest)
+            code, output = run_hook(binary, temporary, package.get("source", "").encode("utf-8"), hook, canonical(case["event"]),
+                                    config_json, package=routed_package)
             _judge(case, code, output, failures)
     if covered != set(packages):
         raise ToolError("fixtures/cases.json does not cover every package")

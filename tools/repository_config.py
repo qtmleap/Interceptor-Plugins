@@ -333,16 +333,43 @@ def _host_ok(host):
     return (0 < len(host) <= 253 and all(_HOST_MATCH_LABEL.fullmatch(l) and l[0] != "-" and l[-1] != "-" for l in labels))
 
 
-def _validate_match(match, what, allow_status):
-    if not isinstance(match, dict) or "hosts" not in match or not set(match) <= {"hosts", "methods", "path", "status"}:
+def valid_source_path(value):
+    return (isinstance(value, str) and len(value.encode('utf-8')) <= 256
+            and all(re.fullmatch(r'[A-Za-z0-9._~-]+', part) and part not in ('.', '..')
+                    for part in value.split('/')))
+
+
+def hook_references(manifest):
+    return {value for match in manifest['matches'] for leg in match['hooks'].values() for value in leg.values()}
+
+
+def validate_source_files(manifest, files, what):
+    if not isinstance(files, dict) or not 1 <= len(files) <= 64 or not all(valid_source_path(k) for k in files):
+        _fail(what, 'invalid sourceFiles')
+    if set(files) != hook_references(manifest):
+        _fail(what, 'sourceFiles must exactly match manifest references')
+    if not all(isinstance(v, str) and '\x00' not in v for v in files.values()):
+        _fail(what, 'sourceFiles must contain JavaScript text without NUL')
+    if sum(len(v.encode('utf-8')) for v in files.values()) > MAX_SOURCE_BYTES:
+        _fail(what, 'combined JavaScript exceeds 128 KiB')
+
+
+def _validate_match(match, what, allow_status, v2=False):
+    required = {'hosts', 'methods', 'path', 'hooks'} if v2 else {'hosts'}
+    allowed = required if v2 else {'hosts', 'methods', 'path', 'status'}
+    if not isinstance(match, dict) or not required <= set(match) or not set(match) <= allowed:
         _fail(what, "invalid match")
     hosts = _strings(match["hosts"], what + " hosts", 1, 32)
     if len(set(hosts)) != len(hosts) or not all(_host_ok(h) for h in hosts):
         _fail(what, "invalid hosts")
+    if v2 and len(hosts) != 1:
+        _fail(what, 'a route requires one host')
     if "methods" in match:
         methods = _strings(match["methods"], what + " methods", 1, 16)
         if len(set(methods)) != len(methods) or not all(re.fullmatch(r"[A-Z]{1,16}", x) for x in methods):
             _fail(what, "invalid methods")
+        if v2 and len(methods) != 1:
+            _fail(what, 'a route requires one method')
     if "path" in match:
         path = match["path"]
         require_exact_keys(path, ("kind", "value"), what + " path")
@@ -350,12 +377,22 @@ def _validate_match(match, what, allow_status):
                 or not re.fullmatch(r"/(?:[A-Za-z0-9\-._~!$&'()*+,;=:@/]|%[0-9A-Fa-f]{2})*", path["value"]) \
                 or len(path["value"]) > 1024:
             _fail(what, "invalid path match")
+        if v2 and path['kind'] != 'exact':
+            _fail(what, 'route paths must be exact')
     if "status" in match:
         status = match["status"]
         require_exact_keys(status, ("min", "max"), what + " status")
         if not allow_status or not is_int(status["min"]) or not is_int(status["max"]) \
                 or not 100 <= status["min"] <= status["max"] <= 599:
             _fail(what, "invalid status range")
+    if v2:
+        hooks = match['hooks']
+        if not isinstance(hooks, dict) or not hooks or not set(hooks) <= {'request', 'response'}:
+            _fail(what, 'invalid hooks')
+        for callbacks in hooks.values():
+            if not isinstance(callbacks, dict) or not callbacks or not set(callbacks) <= {'onEnter', 'onLeave'} \
+                    or not all(valid_source_path(file) for file in callbacks.values()):
+                _fail(what, 'invalid hook file references')
 
 
 def _validate_read(read, what, schema_version, headers_phase):
@@ -423,7 +460,7 @@ def validate_manifest(m, what):
         if not isinstance(matches, list) or not 1 <= len(matches) <= 16:
             _fail(what, "1 to 16 matches required")
         for match in matches:
-            _validate_match(match, what, True)
+            _validate_match(match, what, False, v2=True)
         write = m["write"]
         require_exact_keys(write, ("requestBody", "responseBody"), what + " write")
         if not all(isinstance(write[key], bool) for key in write):
@@ -445,6 +482,8 @@ def validate_manifest(m, what):
     if not isinstance(m["settings"], dict) or len(json.dumps(m["settings"], ensure_ascii=False, separators=(",", ":"), allow_nan=False).encode()) > 8192:
         _fail(what, "invalid settings")
     _json_shape(m["settings"], 16)
+    if version == 2 and len(json.dumps(m, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')) > 32768:
+        _fail(what, 'manifest exceeds 32 KiB')
 
 
 def _list_dir(directory, suffix, kind):
@@ -466,7 +505,7 @@ def _list_dir(directory, suffix, kind):
     return names
 
 
-def load_manifests(root):
+def _load_legacy_manifests(root):
     """Validate identity and authoring pairs without Node or generated JavaScript."""
     root = Path(root)
     authored = (root / "src").exists() or (root / "src").is_symlink()
@@ -497,55 +536,118 @@ def load_manifests(root):
     return manifests_out
 
 
-def load_samples(root):
-    """Always compile canonical TS when present; legacy JS fixtures remain supported."""
+def load_manifests(root):
+    """Validated authored identities and metadata; routed plugins need no generated artifacts."""
+    from route_sources import discover
     root = Path(root)
-    manifests = load_manifests(root)
-    authored = (root / "src").exists()
-    scripts_dir = root / "scripts"
-    if authored:
-        # A fresh compile is mandatory: never trust a generated file or an mtime/cache stamp.
-        result = subprocess.run(["bun", str(root / "tools/compile.mjs"), str(root)],
-                                capture_output=True, text=True)
+    legacy = _load_legacy_manifests(root) if any((root / p).exists() for p in ('src', 'scripts', 'manifests')) else []
+    routed = discover(root)
+    result = legacy + [(name, item['metadata']) for name, item in routed.items()]
+    names, ids = set(), set()
+    for name, manifest in result:
+        identifier = manifest['id'].upper()
+        if name in names or identifier in ids:
+            raise ToolError(f'duplicate plugin basename or id: {name}')
+        names.add(name); ids.add(identifier)
+    if not result:
+        raise ToolError('no samples found')
+    return sorted(result)
+
+
+def _install_generated(root, scripts, manifests):
+    """Install two dedicated generated directories, restoring both after an installation failure."""
+    build = root / 'build'
+    if build.is_symlink():
+        raise ToolError('build must not be a symlink')
+    build.mkdir(exist_ok=True)
+    stamp = uuid.uuid4().hex
+    staged, backups, installed = {}, {}, []
+    try:
+        for kind, values in (('scripts', scripts), ('manifests', manifests)):
+            target = build / kind
+            if target.is_symlink() or (target.exists() and not target.is_dir()):
+                raise ToolError(f'generated {kind} must be a real directory')
+            stage = build / f'.{kind}.{stamp}'
+            stage.mkdir()
+            staged[target] = stage
+            for relative, data in values.items():
+                path = stage / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
+        for target, stage in staged.items():
+            if target.exists():
+                backup = build / f'.{target.name}.backup.{stamp}'
+                os.replace(target, backup)
+                backups[target] = backup
+            os.replace(stage, target)
+            installed.append(target)
+    except BaseException:
+        for target in reversed(installed):
+            shutil.rmtree(target)
+        for target, backup in backups.items():
+            os.replace(backup, target)
+        raise
+    finally:
+        for stage in staged.values():
+            if stage.exists():
+                shutil.rmtree(stage)
+        for backup in backups.values():
+            if backup.exists():
+                shutil.rmtree(backup)
+
+
+def load_samples(root):
+    """Compile routed TS into manifest+files, preserving legacy single-script package bytes."""
+    root = Path(root)
+    authored = load_manifests(root)
+    typed = (root / 'src').exists()
+    routed = any(m['schemaVersion'] == 2 for _, m in authored)
+    emitted = {}
+    if typed or routed:
+        result = subprocess.run(['bun', str(root / 'tools/compile.mjs'), str(root)], capture_output=True, text=True,
+                                env=dict(os.environ, INTERCEPTOR_PYTHON=sys.executable))
         if result.returncode:
-            raise ToolError("TypeScript compilation failed; run bun install --frozen-lockfile --ignore-scripts first if dependencies are missing:\n" + result.stderr)
-        emitted = parse_json_object(result.stdout.encode("utf-8"), "compiler output")
-        if set(emitted) != {name for name, _ in manifests}:
-            raise ToolError("compiler outputs do not match manifests")
-        scripts_dir = root / "build/scripts"
-        if (root / "build").is_symlink() or scripts_dir.is_symlink():
-            raise ToolError("generated source directory must not be a symlink")
-        scripts_dir.parent.mkdir(exist_ok=True)
-        temporary = scripts_dir.parent / (".scripts." + uuid.uuid4().hex)
-        try:
-            temporary.mkdir()
-            for name, source in emitted.items():
-                if not isinstance(source, str):
-                    raise ToolError("compiler output must be text")
-                (temporary / (name + ".js")).write_text(source, encoding="utf-8", newline="\n")
-            if scripts_dir.exists():
-                shutil.rmtree(scripts_dir)
-            os.replace(temporary, scripts_dir)
-        finally:
-            shutil.rmtree(temporary, ignore_errors=True)
-    samples = []
-    for name, manifest in manifests:
-        raw = read_regular(scripts_dir / f"{name}.js", MAX_SOURCE_BYTES)
-        try:
-            source = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            raise ToolError(f"scripts/{name}.js: not valid UTF-8")
-        if "\x00" in source:
-            raise ToolError(f"scripts/{name}.js: contains NUL")
+            raise ToolError('TypeScript compilation failed; run bun install --frozen-lockfile --ignore-scripts first if dependencies are missing:\n' + result.stderr)
+        emitted = parse_json_object(result.stdout.encode('utf-8'), 'compiler output')
+        expected = {name for name, m in authored if typed or m['schemaVersion'] == 2}
+        if set(emitted) != expected:
+            raise ToolError('compiler outputs do not match authored plugins')
+    samples, scripts, manifests = [], {}, {}
+    for name, metadata in authored:
+        if metadata['schemaVersion'] == 2:
+            package = emitted[name]
+            require_exact_keys(package, ('manifest', 'sourceFiles'), name + ' compiler output')
+            manifest, source = package['manifest'], package['sourceFiles']
+            validate_manifest(manifest, name + ' generated manifest')
+            if {k: v for k, v in manifest.items() if k != 'matches'} != metadata:
+                raise ToolError(f'{name}: generated metadata differs from plugin.json')
+            validate_source_files(manifest, source, name)
+            for key, text in source.items():
+                scripts[f'{name}/{key}'] = text.encode('utf-8')
+        else:
+            manifest = metadata
+            raw = emitted[name].encode('utf-8') if typed else read_regular(root / 'scripts' / (name + '.js'), MAX_SOURCE_BYTES)
+            source = raw.decode('utf-8')
+            if len(raw) > MAX_SOURCE_BYTES or '\x00' in source:
+                raise ToolError(f'{name}: invalid or oversized source')
+            if typed:
+                scripts[name + '.js'] = raw
+        manifests[name + '.json'] = dump_json(manifest)
         samples.append((name, manifest, source))
+    if typed or routed:
+        _install_generated(root, scripts, manifests)
     return samples
 
 
 def package_bytes(manifest, source):
-    data = json.dumps({"manifest": manifest, "source": source}, sort_keys=True, separators=(",", ":"),
-                      ensure_ascii=False).encode("utf-8")
+    if manifest['schemaVersion'] == 2:
+        validate_source_files(manifest, source, 'package')
+        package = {'manifest': manifest, 'sourceFiles': source}
+    else:
+        package = {'manifest': manifest, 'source': source}
+    data = json.dumps(package, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
     if len(data) > MAX_PACKAGE_BYTES:
-        raise ToolError("package exceeds the 256 KiB limit")
+        raise ToolError('package exceeds the 256 KiB limit')
     return data
 
 

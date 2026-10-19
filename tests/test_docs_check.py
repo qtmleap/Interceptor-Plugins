@@ -148,3 +148,23 @@ class CheckDocsTests(Case):
         (site / "api.html").write_text(html("ja", '<h2 id="heading">Tea &amp; biscuits</h2><script>const name="Tea & biscuits";</script>'))
         (site / "assets/app.js").write_text('const name="Tea & biscuits";')
         self.ok(self.check(root, site))
+
+    def test_accepts_authored_plugin_metadata_and_hook_includes(self):
+        root, site = self.fixture()
+        plugin = root / 'plugins' / 'example'
+        hooks = plugin / 'hooks' / 'api.example.com' / 'search'
+        hooks.mkdir(parents=True)
+        (plugin / 'plugin.json').write_text('{}')
+        (hooks / 'POST.ts').write_text('Interceptor.attach({request:{onEnter(){}}});')
+        (root / 'website/api.md').write_text('<<< @/../plugins/example/plugin.json\n<<< @/../plugins/example/hooks/api.example.com/search/POST.ts\n')
+        self.ok(self.check(root, site))
+
+    def test_plugin_includes_reject_symlinks_and_do_not_allow_build_root(self):
+        root, site = self.fixture()
+        (root / 'plugins').symlink_to(root / 'src', target_is_directory=True)
+        (root / 'website/api.md').write_text('<<< @/../plugins/a.ts\n')
+        self.rejects(root, site, 'symlink')
+        root, site = self.fixture()
+        (root / 'build/secret.txt').write_text('not publishable')
+        (root / 'website/api.md').write_text('<<< @/../build/secret.txt\n')
+        self.rejects(root, site, 'include must be inside')

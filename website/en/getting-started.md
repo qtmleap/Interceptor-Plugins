@@ -9,7 +9,7 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 # Getting started
 
-The four hooks require an Interceptor build supporting schema 2 and live HTTP hooks. Import a plugin, test it with synthetic JSON, then approve its exact revision for live use. Plugin development also runs on Linux.
+The schema 2 format and live HTTP hooks described here are under development. The four hooks require an Interceptor build supporting them. Import a plugin, test it with synthetic JSON, then approve its exact revision for live use. Plugin development also runs on Linux.
 
 ## Add the repository
 
@@ -21,7 +21,7 @@ Open **Settings → Plugins → + → Add Repository** and enter:
 %%REPOSITORY_URL%%
 ```
 
-Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect its source and manifest, which declares targets, permissions and other plugin metadata.
+Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect all its source files and the manifest, which declares targets, permissions and other plugin metadata.
 
 ## Verifying trust
 
@@ -47,7 +47,7 @@ The value on this page alone does not complete verification. This site and feed 
 
 Synthetic tests execute input JSON without sending live traffic or webhooks.
 
-1. Select a package and inspect its source and manifest.
+1. Select a package and inspect all its source files and manifest.
 2. Import it disabled.
 3. Open the script and select a hook. Enter JSON containing traffic metadata as well as the HTTP body, then run the synthetic test.
 
@@ -66,8 +66,8 @@ For a schema 2 script, follow these steps. `api.example.com` is an illustrative 
 <HookFlow locale="en" />
 
 1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
-2. Open **Settings → SSL Proxying List** and add the host declared in the plugin's `hosts` match.
-3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Live HTTP hooks → Approve This Revision…**, then confirm. A revision is the exact source/manifest combination shown.
+2. Open **Settings → SSL Proxying List** and add the host shown in the script’s target conditions.
+3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Live HTTP hooks → Approve This Revision…**, then confirm. A revision is the exact package containing all source files and the manifest shown.
 4. Return to **Settings**, turn on **Status**, generate matching traffic and open the host's traffic from **Home** to inspect the forwarded JSON.
 
 Approval lets the script read its declared traffic data and, when permitted, change JSON sent to a server or returned to a client.

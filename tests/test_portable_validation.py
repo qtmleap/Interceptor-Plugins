@@ -16,7 +16,7 @@ class PortableValidationTests(unittest.TestCase):
         with self.assertRaises(config.ToolError):
             config.check_uuid('11111111-2222-4333-8444-555555555555\n', 'id')
         self.assertIsNone(tool.parse_time('2026-01-01T00:00:00Z\n'))
-        manifest = json.loads((REPO / 'manifests/request-summary.json').read_text())
+        manifest = __import__('test_http_hooks_v2').v2()
         for version in ('١.٢.٣', '1.2.3\n'):
             with self.subTest(version=version), self.assertRaises(config.ToolError):
                 config.validate_manifest(dict(manifest, version=version), 'manifest')
@@ -27,6 +27,6 @@ class PortableValidationTests(unittest.TestCase):
                 config.parse_json_object(text.encode(), 'config')
 
     def test_utf8_settings_use_the_encoded_size(self):
-        manifest = json.loads((REPO / 'manifests/request-summary.json').read_text())
+        manifest = __import__('test_http_hooks_v2').v2()
         manifest['settings'] = {'text': 'あ' * 1400}
         config.validate_manifest(manifest, 'manifest')

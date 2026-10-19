@@ -19,7 +19,7 @@ How to create and distribute your own repository.
    ```
 
    Setup configures new IDs, a signing key (kept outside Git), a master-only environment secret and Pages (Actions). It does not commit, push or deploy. Your private key and retry checkpoint live in `~/.config/interceptor/repositories/OWNER--NAME/`; back it up.
-3. Edit `src/NAME.ts`, the manifest and fixtures, commit them with your public configuration, and push `master`.
+3. Edit TypeScript under `plugins/NAME/hooks/`, metadata in `plugins/NAME/plugin.json`, and `fixtures/cases.json`. Commit these files and your public configuration, excluding generated manifests and JavaScript, then push `master`.
 4. When **Publish signed repository** passes its live verification, register the printed `https://OWNER.github.io/REPO/repository.json` URL in the app. Until then it is only the intended address.
 
 Setup writes repository and plugin IDs, the feed URL and public-key fingerprint into configuration files. Commit that public configuration too. Organization permissions and any additional protections still apply.

@@ -40,13 +40,6 @@ declare namespace Interceptor {
   }
   interface Result { actions: WebhookAction[] }
 
-  /** Must equal one `matches` entry of the manifest. Fields combine with AND, values within a field with OR. */
-  interface Match {
-    hosts: string[];
-    methods?: string[];
-    path?: { kind: 'exact' | 'prefix'; value: string };
-    status?: { min: number; max: number };
-  }
   /** The request as granted by the manifest. `body` is the JSON tree; edit it in place on `onEnter` only. */
   interface RequestLeg {
     readonly id?: string;
@@ -78,6 +71,6 @@ declare namespace Interceptor {
       onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome;
     };
   }
-  /** Registers callbacks for one declared match; a source may call this up to 16 times. */
-  function attach(match: Match, hooks: Hooks): void;
+  /** Registers this file's handlers. The build derives targets from its path. */
+  function attach(hooks: Hooks): void;
 }

@@ -4,7 +4,9 @@
 
 Documentation: [English](https://qtmleap.github.io/Interceptor-Plugins/en/) / [日本語](https://qtmleap.github.io/Interceptor-Plugins/)
 
-Official examples and a repository template for adding JavaScript processing to Interceptor traffic. Match hosts, paths and methods; change request JSON before sending or response JSON before returning; run callbacks after successful forwarding. Author TypeScript and schema 2 manifests, test with the app's shared QuickJS engine, then publish signed packages over HTTPS.
+Official examples and a repository template for adding JavaScript processing to Interceptor traffic. Match hosts, paths and methods; change request JSON before sending or response JSON before returning; run callbacks after successful forwarding. Write TypeScript in `plugins/NAME/hooks/` and metadata in `plugins/NAME/plugin.json`; the build generates the schema 2 manifest and JavaScript files. Test with the app's shared QuickJS engine, then publish signed packages over HTTPS.
+
+The schema 2 format and live HTTP hooks described here are under development.
 
 ## Add the official repository
 
@@ -26,9 +28,9 @@ Choose a package, inspect its source and grants, then import it disabled. Open i
 
 ### Server error filter
 
-For `example.com` responses with status 500–599, `response.onEnter` adds `maintenance: true` to JSON and `response.onLeave` builds a result. Change status to `200` for a non-matching case.
+For responses to `GET https://example.com/`, the callbacks check for status 500–599. For those responses, `response.onEnter` adds `maintenance: true` to JSON and `response.onLeave` builds a result. Change status to `200` to leave the body unchanged and return no action.
 
-For live traffic, users must inspect the source and grants and approve the exact revision. Importing or editing alone never activates it. Live actions are neither stored nor delivered. See [setup](website/en/getting-started.md) and the [four-hook diagram](website/en/index.md).
+For live traffic, users must inspect the source and grants and approve the exact revision. Importing or editing alone never activates it. Live actions are neither stored nor delivered. See [setup](website/en/getting-started.md) and the [four-hook diagram](website/en/what-is-interceptor.md).
 
 ## Development container
 
@@ -45,16 +47,17 @@ bun run check
 
 The command fetches the pinned public Interceptor source, builds a Rust simulator using its unchanged QuickJS bridge, checks deterministic package bytes, runs request/response fixtures, and checks signed metadata and byte-tampering failures with a temporary test key. It never uses the official signing key or publishes anything.
 
-Canonical sources live in `src/*.ts` and `manifests/`; expected input and output live in `fixtures/`. Packaging always type-checks and compiles from source. `build/scripts/` and `build/site/` are generated and ignored. See the [authoring guide](website/en/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; QuickJS is fetched at that revision; Bun supplies Ed25519 primitives without a new cryptography dependency.
+Canonical sources live in `plugins/NAME/hooks/`, with metadata and permissions in `plugins/NAME/plugin.json`; expected input and output live in `fixtures/`. Each route file uses one-argument `Interceptor.attach({ request: { ... }, response: { ... } })`. The build derives exact host/path/method routes and hook-to-file references from file locations and callback definitions, then emits `{manifest, sourceFiles}` packages. Packaging always type-checks and compiles from source. `build/manifests/`, `build/scripts/` and `build/site/` are generated and ignored. See the [authoring guide](website/en/authoring.md) for hook types and host limits. The upstream runtime revision is recorded in `repository-config.json`; QuickJS is fetched at that revision; Bun supplies Ed25519 primitives without a new cryptography dependency.
 
 ## Emulate a plugin
 
 ```sh
-bun run simulator check build/scripts/request-summary.js
-bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/request-event.json fixtures/config.json --manifest manifests/request-summary.json
+bun run build
+bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
+bun run simulator run-package build/site/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
-Run `bun run check` first to generate the JavaScript. `check` parses syntax without executing the script; `run` invokes one lifecycle hook and prints its actions and body mutation JSON without sending webhooks. The built `.tools/bin/interceptor-simulator` is a standalone binary for its OS and CPU, with normal system-library dependencies.
+Run `bun run check` first. `build` generates unsigned development packages and requires an absent or empty `build/site/` output directory. Simulator `check` parses syntax without executing the script; `run-package` selects a file from the package manifest for the traffic and requested hook, then prints actions and body mutation JSON without sending webhooks. The built `.tools/bin/interceptor-simulator` is a standalone binary for its OS and CPU, with normal system-library dependencies.
 
 ## Make your own repository
 
@@ -68,7 +71,7 @@ Run `bun run check` first to generate the JavaScript. `check` parses syntax with
    ```
 
    Setup allocates new repository/plugin IDs, creates your signing key outside Git, stores its environment secret behind a master-only deployment policy, sets Pages to use Actions and enables publishing. It preserves existing protections and refuses unknown keys/secrets or an official checkout. Keep a secure backup of `~/.config/interceptor/repositories/OWNER--NAME/`: it holds your private key and retry checkpoint. Re-running setup resumes the same identity and key. No commit, push or deployment is performed by setup.
-3. Edit `src/NAME.ts`, its manifest and fixtures together. Commit your **public configuration**, TypeScript, manifests and tests, then push `master`. CI compiles, checks real QuickJS outputs, generates package SHA-256 hashes, signs and publishes automatically. No manual signing commands are needed for each release.
+3. Edit `plugins/NAME/hooks/`, `plugins/NAME/plugin.json` and fixtures together. Commit your **public configuration**, authored TypeScript, plugin metadata and tests, then push `master`. Do not commit generated manifests or JavaScript. CI compiles, checks real QuickJS outputs, generates package SHA-256 hashes, signs and publishes automatically. No manual signing commands are needed for each release.
 4. Wait for **Publish signed repository** to pass its live verification. Register the printed `https://OWNER.github.io/REPO/repository.json` URL in Interceptor. Setup's URL is a future address until deployment succeeds. Share the public fingerprint through an independently trusted channel; a valid signature alone does not prove publisher identity.
 
 The first setup needs GitHub administration permission to configure Pages, the deployment environment and its secret; the workflow's ordinary token does not bootstrap these credentials. Organization restrictions may require a maintainer to adjust settings. Existing repositories can use the [manual setup and recovery instructions](docs/maintaining.md).

@@ -9,7 +9,7 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 # サンプル
 
-ソースとmanifestを同じページに載せています。サンプルはいずれもスキーマ2です。テストの入力と期待値は`fixtures/cases.json`にあります。Webhook形式のアクションは合成テストの結果欄で確認できます。実通信では戻り値を保存・送信しません。
+処理を書くTypeScriptファイルと、権限を指定する`plugin.json`を載せています。サンプルはいずれも開発中のスキーマ2です。テストの入力と期待値は`fixtures/cases.json`にあります。Webhook形式のアクションは合成テストの結果欄で確認できます。実通信では戻り値を保存・送信しません。
 
 <HookFlow locale="ja" />
 
@@ -17,16 +17,20 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 `POST api.example.com/search`を対象にします。`request.onEnter`でJSONの`limit`を`5`へ変更し、`response.onEnter`で`maintenance: true`を追加します。各`onLeave`では転送した内容からテスト用のアクションを作ります。
 
-<<< ../src/request-summary.ts{ts}
+`plugins/request-summary/hooks/api.example.com/search/POST.ts`
 
-<<< ../manifests/request-summary.json{json}
+<<< ../plugins/request-summary/hooks/api.example.com/search/POST.ts{ts}
 
-`Interceptor.attach`を処理ごとに並べても、1つの呼び出しに4つのHookを書いても構いません。対象条件はmanifestの`matches`と同じ内容にします。
+<<< ../plugins/request-summary/plugin.json{json}
+
+このファイルでは1つの`Interceptor.attach`に4つのHookを定義しています。別のAPIにも処理を加える場合は、同じプラグインの`hooks/`以下にファイルを追加します。対象条件とファイルの対応はビルドが生成します。
 
 ## Server error filter {#server-error-filter}
 
-`example.com`の5xxレスポンスを対象にします。ステータスの条件は対象判定で確認するため、Hook内の条件分岐は不要です。転送前にJSONへ`maintenance: true`を追加し、転送後にホストとステータスを含むテスト用のアクションを返します。
+`GET https://example.com/`のレスポンスを処理します。ファイルの配置でホスト・パス・メソッドを指定し、Hook内でステータスが5xxかを確認します。5xxの場合だけ、転送前にJSONへ`maintenance: true`を追加し、転送後にホストとステータスを含むテスト用のアクションを返します。
 
-<<< ../src/server-error-filter.ts{ts}
+`plugins/server-error-filter/hooks/example.com/GET.ts`
 
-<<< ../manifests/server-error-filter.json{json}
+<<< ../plugins/server-error-filter/hooks/example.com/GET.ts{ts}
+
+<<< ../plugins/server-error-filter/plugin.json{json}

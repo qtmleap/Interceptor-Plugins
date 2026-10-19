@@ -10,7 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 class HookTypesTests(unittest.TestCase):
     def test_leave_and_response_request_views_reject_writes(self):
         source = '''
-Interceptor.attach({hosts: ['example.com']}, {
+// @ts-expect-error route conditions and IDs are not part of the JS API
+Interceptor.attach('search', {});
+// @ts-expect-error host/path/method come from the file location
+Interceptor.attach({hosts: ['example.com']}, {});
+// @ts-expect-error Match is not an author-facing type
+const match: Interceptor.Match = {};
+Interceptor.attach({
   request: {
     onEnter(request) { request.body.limit = 5; request.body = {limit: 5}; },
     onLeave(request) {

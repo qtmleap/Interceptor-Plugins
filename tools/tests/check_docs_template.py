@@ -41,7 +41,9 @@ def main():
     name = 'Template </script><img src=x onerror=alert(1)><!--{{7*7}} & "tea"'
     with tempfile.TemporaryDirectory(prefix="interceptor-docs-template-") as directory:
         root = Path(directory)
-        for folder in ("tools", "src", "types", "manifests", "fixtures", "website", "docs/diagrams"):
+        for folder in ("tools", "plugins", "src", "scripts", "types", "manifests", "fixtures", "website", "docs/diagrams"):
+            if folder in ("plugins", "src", "scripts", "manifests") and not (args.root / folder).exists():
+                continue
             shutil.copytree(args.root / folder, root / folder,
                             ignore=shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc"))
         for file in ("repository-config.json", "package.json", "bun.lock", ".bun-version"):

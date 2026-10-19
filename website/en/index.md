@@ -24,7 +24,7 @@ features:
       width: 24
       height: 24
     title: Match the traffic you need
-    details: Choose a host, path and method. Hooks run only for matching traffic, so you can focus on the processing instead of repeating those checks in JavaScript.
+    details: Set the host, path and method through the file’s location under hooks/. Hooks run only for matching traffic, so JavaScript does not need to repeat those checks.
     link: /en/api
   - icon:
       src: /icons/json.svg

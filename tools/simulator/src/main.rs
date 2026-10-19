@@ -16,7 +16,7 @@ struct Limits {
     max_result_depth: usize,
     max_actions: usize,
 }
-const MAX_MANIFEST_BYTES: usize = 32 * 1024;
+const MAX_PACKAGE_BYTES: usize = 256 * 1024;
 const LIMITS: Limits = Limits {
     deadline_ms: 50,
     heap_bytes: 8 * 1024 * 1024,
@@ -60,8 +60,6 @@ extern "C" {
         event_len: usize,
         config: *const u8,
         config_len: usize,
-        manifest: *const u8,
-        manifest_len: usize,
     ) -> QjsResult;
     fn qjs_result_free(result: *mut QjsResult);
     fn sim_check_syntax(
@@ -117,7 +115,7 @@ fn execute(args: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     if args.is_empty() || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h")) {
-        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run SOURCE.js request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json --manifest MANIFEST.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run prints action JSON only; no webhooks are sent.");
+        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest. No webhooks are sent.");
         return Ok(0);
     }
     match (args[0].as_str(), args.len()) {
@@ -148,11 +146,8 @@ fn execute(args: &[String]) -> Result<i32, String> {
             }
             Ok(status)
         }
-        ("run", 5) | ("run", 7) => {
-            let v2 = args.len() == 7;
-            if v2 && args[5] != "--manifest" {
-                return Err("invalid arguments; use --help".into());
-            }
+        ("run", 5) | ("run-package", 5) => {
+            let v2 = args[0] == "run-package";
             let allowed: &[&str] = if v2 {
                 &[
                     "request.onEnter",
@@ -171,17 +166,19 @@ fn execute(args: &[String]) -> Result<i32, String> {
                 }
                 .into());
             }
-            let source = read_regular(&args[1], LIMITS.max_source_bytes)?;
+            let source = read_regular(
+                &args[1],
+                if v2 {
+                    MAX_PACKAGE_BYTES
+                } else {
+                    LIMITS.max_source_bytes
+                },
+            )?;
             let event = read_regular(&args[3], LIMITS.max_event_bytes)?;
             let config = read_regular(&args[4], LIMITS.max_config_bytes)?;
-            let manifest = if v2 {
-                read_regular(&args[6], MAX_MANIFEST_BYTES)?
-            } else {
-                Vec::new()
-            };
-            for input in [&event, &config].into_iter().chain(v2.then_some(&manifest)) {
+            for input in [&event, &config].into_iter().chain(v2.then_some(&source)) {
                 if unsafe { sim_validate_json(input.as_ptr(), input.len(), 1, 64) } == 0 {
-                    return Err("event, config and manifest must be strict JSON objects".into());
+                    return Err("event, config and package must be strict JSON objects".into());
                 }
             }
             let hook = CString::new(args[2].as_bytes()).map_err(|_| "invalid hook")?;
@@ -201,8 +198,6 @@ fn execute(args: &[String]) -> Result<i32, String> {
                         event.len(),
                         config.as_ptr(),
                         config.len(),
-                        manifest.as_ptr(),
-                        manifest.len(),
                     )
                 } else {
                     qjs_run(
