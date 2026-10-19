@@ -4,9 +4,9 @@ import { withBase } from 'vitepress'
 const props = defineProps<{ locale: 'ja' | 'en' }>()
 const copy = {
   ja: {
-    scroll: '通信とHookの位置。狭い画面では横にスクロールできます',
-    alt: '未実装のHook設計。クライアントからサーバーへ向かうリクエストに1 request.onEnterと2 request.onLeave、逆向きのレスポンスに3 response.onEnterと4 response.onLeaveを設けます。onEnterは転送前の変更、onLeaveは転送後の後処理です。',
-    caption: '青いカードは転送前に内容を変更できるHook、破線の先は転送後の後処理です。番号は下の説明に対応します。図はHookの位置を示し、4つ全体の実行順や相手の受信・処理を保証しません。狭い画面では横にスクロールできます。'
+    scroll: "通信の流れとHookの位置。画面が狭い場合は横にスクロールして確認できます",
+    alt: "未実装のHook設計を示す図です。クライアントからサーバーへ送るリクエストには1 request.onEnterと2 request.onLeave、サーバーから元のアプリへ返すレスポンスには3 response.onEnterと4 response.onLeaveを設けます。onEnterでは転送前に内容を変更でき、onLeaveでは転送後の後処理を行います。",
+    caption: "青いカードは転送前に内容を変更できるHook、破線の矢印は転送後に呼ぶHookを示します。番号は下の説明に対応します。図はHookを呼ぶ位置を示すもので、4つ全体の実行順序や、相手がデータを受信・処理したことを保証するものではありません。狭い画面では横にスクロールして確認できます。"
   },
   en: {
     scroll: 'Traffic and Hook positions. Scroll horizontally on narrow screens',

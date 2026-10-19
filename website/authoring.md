@@ -7,15 +7,15 @@ lang: ja
 
 ## ファイルの構成
 
-`src/NAME.ts`、`manifests/NAME.json`、`fixtures/cases.json` を一緒に編集します。ソースにはそれぞれ、同じ小文字kebab-caseの名前のmanifestが必要です。リポジトリ／プラグインのIDは初回セットアップ後は変えません。
+`src/NAME.ts`、`manifests/NAME.json`、`fixtures/cases.json` を一緒に編集します。ソースとmanifestには、拡張子を除いて同じ小文字のkebab-case名を付けます。リポジトリ／プラグインのIDは初回セットアップ後に変更しません。
 
 ## 必要なツール
 
-Bun %%BUN_VERSION%%、Python 3、OpenSSL、Gitを使います。全検証の `bun run check` には、Xcode 27 / Swift 6.4を選択したMacが必要です。Linuxでは `check:authoring` を実行できます。
+Bun %%BUN_VERSION%%、Python 3、OpenSSL、Gitを使います。すべての検証を行う `bun run check` には、Xcode 27 / Swift 6.4を選択したMacが必要です。Linuxでは `check:authoring` を実行できます。
 
 ## プラグインを追加する
 
-既存のTypeScriptとmanifestをコピーし、同じ新しい小文字kebab-caseのファイル名に揃えます。manifestの `id` には重複しないUUIDを一度生成し、公開後は維持します。
+既存のTypeScriptとmanifestをコピーし、新しい小文字のkebab-case名に変更します。拡張子を除いた名前は両方で揃えてください。manifestの `id` には重複しないUUIDを一度生成し、公開後も同じ値を使います。
 
 ```sh
 python3 -c 'import uuid; print(uuid.uuid4())'
@@ -44,9 +44,9 @@ bun run build             # 未署名の開発用パッケージを build/site/ 
 ```
 
 - TypeScript 5.8.3 は `bun.lock` で固定されています。
-- `bun run build` の出力先 `build/site/` は、存在しないか空である必要があります。前回の生成物だけを削除してから再実行してください。
+- `bun run build` の出力先 `build/site/` は存在しないか空である必要があります。再実行する前に、前回の生成物だけを削除してください。
 - `build/scripts/` の生成JavaScriptは編集もcommitもしません。パッケージ生成のたびにTypeScriptから再生成されます。
-- 署名鍵はテスト後にpublishing workflowが用意します。手元で署名する必要はありません。
+- 署名鍵はテスト後に公開用ワークフローが用意します。手元で署名する必要はありません。
 
 ## バージョンを更新する
 
@@ -54,11 +54,11 @@ bun run build             # 未署名の開発用パッケージを build/site/ 
 
 ## フックを書く
 
-トップレベル関数 `onRequest` または `onResponse` を、manifestの購読に合わせて定義します。各プラグインは独立してコンパイルされるため、ファイル間で関数名が重複しても構いません。
+manifestに宣言した購読に合わせ、トップレベルに `onRequest` または `onResponse` という関数を定義します。各プラグインは別々にコンパイルされるため、ファイル間で関数名が重複しても構いません。
 
 <<< ../src/request-summary.ts{ts}
 
-このサンプルはテスト用の `preview` バインディングと入力を使います。新しいフックでは、バインディングと任意の入力項目が存在することを確認し、必要な値がなければ `{ actions: [] }` を返してください。
+このサンプルはテスト用の `preview` バインディングと入力を使います。新しいフックを書くときは、バインディングや省略可能な入力項目の有無を確認し、必要な値がなければ `{ actions: [] }` を返してください。
 
 型は [APIリファレンス](api.md) を参照してください。
 
@@ -68,8 +68,8 @@ bun run build             # 未署名の開発用パッケージを build/site/ 
 
 ## 実行環境の制約
 
-ランタイムは1つのグローバルスクリプトを評価し、フックを同期的に呼びます。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。実行の境界はアプリの制限付きQuickJSです。
+実行環境は1つのグローバルスクリプトを評価し、フックを同期的に呼びます。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。スクリプトはアプリ内の制限付きQuickJS環境で実行されます。
 
-プレビューが返すWebhook intentは最大2件で、送信はせず、キャプチャへ自動接続もしません。SHA-256は生成されたパッケージのバイト列を対象とし、署名付き一覧がそのハッシュを認証します。
+プレビューが返すWebhookへの送信要求（intent）は最大2件です。実際の送信や、キャプチャした通信に合わせた自動実行は行いません。SHA-256は生成されたパッケージのバイト列から計算し、署名付きの一覧がそのハッシュを認証します。
 
 公開は[公開](publishing.md)、Linuxでの開発は[開発コンテナ](devcontainer.md)を参照してください。
