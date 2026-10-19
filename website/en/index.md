@@ -36,13 +36,13 @@ features:
     details: Read and change request and response JSON directly in JavaScript. Replace values or add fields in the data actually sent to the server or client.
     link: /en/authoring
   - icon:
-      src: /icons/terminal.svg
+      src: /icons/check.svg
       alt: ""
       wrap: true
       width: 24
       height: 24
-    title: Develop on Linux
-    details: Use Bun and the Rust simulator to check syntax and run hooks against test data. Develop and test plugins on Linux without macOS or Xcode.
+    title: Try it with test data
+    details: Use sample requests and responses to check JSON changes and matching conditions. Try your plugin before applying it to live traffic.
     link: /en/authoring
   - icon:
       src: /icons/package.svg

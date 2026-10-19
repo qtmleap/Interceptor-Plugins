@@ -40,19 +40,21 @@ const search: Interceptor.Match = {
 
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     }
   },
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 ```
+
+`req`はリクエスト、`res`はレスポンス、`cfg`はプラグインの設定です。この例では`cfg`を使いません。設定が不要なら、第2引数の宣言は省略できます。
 
 この例は、本文がJSONオブジェクトの場合だけ項目を変更します。本文がない場合や配列の場合は、変更しません。ホストやメソッドの判定は`attach`が行うため、Hook内で同じ条件を確認する必要はありません。
 

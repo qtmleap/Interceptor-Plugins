@@ -24,39 +24,41 @@ const search: Interceptor.Match = {
 
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     },
-    onLeave(request, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(req, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook',
         endpointId,
-        json: { path: request.path! }
+        json: { path: req.path! }
       }] };
     }
   },
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     },
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook',
         endpointId,
-        json: { status: response.status! }
+        json: { status: res.status! }
       }] };
     }
   }
 });
 ```
 
-必要なHookだけを定義できます。第1引数は、そのHookが処理するリクエストまたはレスポンスです。第2引数の`config`には設定値とエンドポイントのバインディングが入ります。`response.request`から、そのレスポンスに対応するリクエストを参照できます。
+必要なHookだけを定義できます。リクエストでは`(req, cfg)`、レスポンスでは`(res, cfg)`を受け取ります。`req`と`res`は通信データ、`cfg`はプラグインの設定です。manifestの`settings`は`cfg.settings`で参照できます。合成テスト用のエンドポイントIDは`cfg.endpoints`から参照します。
+
+設定を使わない場合は、第2引数の宣言を省略して`onEnter(res) { ... }`とも書けます。`res.request`から、そのレスポンスに対応するリクエストを参照できます。
 
 ### 対象条件
 
@@ -67,24 +69,24 @@ Interceptor.attach(search, {
 - `path`: `exact`で完全一致、`prefix`で前方一致。クエリ文字列を除いたパスに適用します。
 - `status`: レスポンスのステータス範囲。`min`と`max`の両端を含みます。リクエストのHookには指定しません。
 
-項目を組み合わせた場合は、すべての条件を満たす通信が対象です。配列内の値はいずれかに一致すれば対象になります。たとえば、対象をステータス500〜599に絞るだけなら、`read.metadata`に`status`を含める必要はありません。Hook内で`response.status`を読む場合に、その項目の権限が必要です。
+項目を組み合わせた場合は、すべての条件を満たす通信が対象です。配列内の値はいずれかに一致すれば対象になります。たとえば、対象をステータス500〜599に絞るだけなら、`read.metadata`に`status`を含める必要はありません。Hook内で`res.status`を読む場合に、その項目の権限が必要です。
 
 ## request.onEnter {#request-onenter}
 
-リクエストをサーバーへ転送する前に呼びます。`read.body.mode`が`json`で、`write.requestBody`が`true`なら、`request.body`のJSONを変更できます。
+リクエストをサーバーへ転送する前に呼びます。`read.body.mode`が`json`で、`write.requestBody`が`true`なら、`req.body`のJSONを変更できます。
 
 ```ts
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     }
   }
 });
 ```
 
-本文全体を置き換える場合は`request.body = { query: 'example', limit: 5 }`のように代入します。変更がなければ元の本文をそのまま転送します。専用の書き換え関数を用意する必要はありません。
+本文全体を置き換える場合は`req.body = { query: 'example', limit: 5 }`のように代入します。変更がなければ元の本文をそのまま転送します。専用の書き換え関数を用意する必要はありません。
 
 ## request.onLeave {#request-onleave}
 
@@ -93,13 +95,13 @@ Interceptor.attach(search, {
 ```ts
 Interceptor.attach(search, {
   request: {
-    onLeave(request, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(req, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook',
         endpointId,
-        json: { method: request.method!, path: request.path! }
+        json: { method: req.method!, path: req.path! }
       }] };
     }
   }
@@ -110,20 +112,20 @@ Interceptor.attach(search, {
 
 ## response.onEnter {#response-onenter}
 
-サーバーのレスポンスをクライアントへ転送する前に呼びます。`read.body.mode`が`json`で、`write.responseBody`が`true`なら、`response.body`のJSONを変更できます。
+サーバーのレスポンスをクライアントへ転送する前に呼びます。`read.body.mode`が`json`で、`write.responseBody`が`true`なら、`res.body`のJSONを変更できます。
 
 ```ts
 Interceptor.attach(search, {
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 ```
 
-`response.request`は参照用です。ここからリクエストを変更することはできません。
+`res.request`は参照用です。ここからリクエストを変更することはできません。
 
 ## response.onLeave {#response-onleave}
 
@@ -132,13 +134,13 @@ Interceptor.attach(search, {
 ```ts
 Interceptor.attach(search, {
   response: {
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook',
         endpointId,
-        json: { path: response.request.path!, status: response.status! }
+        json: { path: res.request.path!, status: res.status! }
       }] };
     }
   }
@@ -162,7 +164,7 @@ Interceptor.attach(search, {
 
 `write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
 
-`endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`config.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`config.settings`で参照します。
+`endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`cfg.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`cfg.settings`で参照します。
 
 旧スキーマ1の`onRequest`と`onResponse`は既存パッケージの合成テスト用に残っています。4つのHookを使うソースでは定義しません。スキーマ1のパッケージは実通信では有効にできません。
 

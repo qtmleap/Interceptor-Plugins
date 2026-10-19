@@ -36,13 +36,13 @@ features:
     details: リクエストやレスポンスのJSON本文を、JavaScriptで直接読み書きできます。実際に送るデータの値を差し替えたり、フィールドを追加したりできます。
     link: /authoring
   - icon:
-      src: /icons/terminal.svg
+      src: /icons/check.svg
       alt: ""
       wrap: true
       width: 24
       height: 24
-    title: Linuxでも開発
-    details: BunとRust製シミュレーターで構文をチェックし、テストデータでHookの動作を確認できます。プラグインの開発やテストに、macOSやXcodeは必要ありません。
+    title: テストデータで確認
+    details: テスト用のリクエストやレスポンスで、JSONの変更や条件判定を確認できます。実際の通信に適用する前に、プラグインの動作を試せます。
     link: /authoring
   - icon:
       src: /icons/package.svg

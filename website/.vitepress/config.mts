@@ -15,8 +15,6 @@ const texts = {
 
 const textsFor = (relativePath: string) => (relativePath.startsWith('en/') ? texts.en : texts.root)
 
-const pages = ['getting-started', 'authoring', 'api', 'examples', 'publishing', 'devcontainer'] as const
-
 const labels = {
   root: {
     'getting-started': 'はじめに',
@@ -46,17 +44,37 @@ function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
   const prefix = locale === 'root' ? '/' : '/en/'
+  const ja = locale === 'root'
+  const page = (name: keyof typeof labels.root): DefaultTheme.SidebarItem => ({ text: labels[locale][name], link: `${prefix}${name}` })
+  const referenceLink = (text: string, anchor: string): DefaultTheme.SidebarItem => ({ text, link: `${prefix}api#${encodeURIComponent(anchor)}` })
   const hooks = [
     ['request.onEnter', 'request-onenter'],
     ['request.onLeave', 'request-onleave'],
     ['response.onEnter', 'response-onenter'],
     ['response.onLeave', 'response-onleave']
   ]
-  const items = pages.map((page) => ({
-    text: labels[locale][page], link: `${prefix}${page}`,
-    ...(page === 'api' ? { items: hooks.map(([text, anchor]) => ({ text, link: `${prefix}api#${anchor}` })) } : {})
-  }))
-  return [{ text: locale === 'root' ? 'ドキュメント' : 'Documentation', items }]
+  const guide: DefaultTheme.SidebarItem[] = [
+    { text: ja ? '導入' : 'Introduction', items: [page('getting-started')] },
+    { text: ja ? 'プラグイン' : 'Plugins', items: [page('authoring'), page('examples')] },
+    { text: ja ? '開発と公開' : 'Development and publishing', items: [page('devcontainer'), page('publishing')] },
+    { items: [{ text: ja ? 'APIリファレンス' : 'API reference', link: `${prefix}api` }] }
+  ]
+  const reference: DefaultTheme.SidebarItem[] = [
+    { text: ja ? 'リファレンス' : 'Reference', items: [
+      { text: ja ? '概要' : 'Overview', link: `${prefix}api` },
+      referenceLink('Interceptor.attach', 'interceptor-attach'),
+      referenceLink(ja ? '対象条件' : 'Matching', ja ? '対象条件' : 'matching')
+    ] },
+    { text: 'Hook', items: hooks.map(([text, anchor]) => referenceLink(text, anchor)) },
+    { text: ja ? '設定と制限' : 'Configuration and limits', items: [
+      referenceLink(ja ? 'manifestと権限' : 'Manifest and permissions', ja ? 'manifestと権限' : 'manifest-and-permissions'),
+      referenceLink(ja ? '実行条件と制限' : 'Execution and limits', ja ? '実行条件と制限' : 'execution-and-limits'),
+      referenceLink(ja ? '型宣言' : 'Types', ja ? '型宣言' : 'types')
+    ] },
+    { items: [{ text: ja ? 'ガイド' : 'Guide', link: `${prefix}getting-started` }] }
+  ]
+  // Flat routes have equal depth; keep the specific API prefix before the guide fallback.
+  return { [`${prefix}api`]: reference, [prefix]: guide }
 }
 
 const searchTranslations = {

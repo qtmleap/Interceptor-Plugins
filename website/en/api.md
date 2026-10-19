@@ -24,37 +24,39 @@ const search: Interceptor.Match = {
 
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     },
-    onLeave(request, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(req, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook', endpointId,
-        json: { path: request.path! }
+        json: { path: req.path! }
       }] };
     }
   },
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     },
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook', endpointId,
-        json: { status: response.status! }
+        json: { status: res.status! }
       }] };
     }
   }
 });
 ```
 
-Define only the callbacks you need. Each callback receives its own request or response as the first argument and `config` as the second. `response.request` refers to the associated request.
+Define only the callbacks you need. Request hooks receive `(req, cfg)` and response hooks receive `(res, cfg)`. `req` and `res` contain traffic data; `cfg` contains plugin configuration. Read the manifest's `settings` through `cfg.settings`. Synthetic-test endpoint bindings are available through `cfg.endpoints`.
+
+When you do not use configuration, omit the second parameter: `onEnter(res) { ... }`. `res.request` refers to the associated request.
 
 ### Matching
 
@@ -65,7 +67,7 @@ Each `match` must equal an entry in the manifest's `matches`. Undeclared registr
 - `path`: `exact` or `prefix`, applied to the path without its query string.
 - `status`: inclusive `min` and `max` response status range. Use this for response callbacks only.
 
-Different fields combine with AND; values in an array combine with OR. For example, a 500–599 status condition works without `status` in `read.metadata`. The grant is needed to read `response.status` inside a callback.
+Different fields combine with AND; values in an array combine with OR. For example, a 500–599 status condition works without `status` in `read.metadata`. The grant is needed to read `res.status` inside a callback.
 
 ## request.onEnter {#request-onenter}
 
@@ -74,15 +76,15 @@ Runs before forwarding a request upstream. With `read.body.mode: "json"` and `wr
 ```ts
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     }
   }
 });
 ```
 
-Assign `request.body = { query: 'example', limit: 5 }` to replace the entire body. Unchanged bodies retain their original bytes. No author-defined rewrite helper is needed.
+Assign `req.body = { query: 'example', limit: 5 }` to replace the entire body. Unchanged bodies retain their original bytes. No author-defined rewrite helper is needed.
 
 ## request.onLeave {#request-onleave}
 
@@ -91,12 +93,12 @@ Runs after successful local forwarding of the request. It sees edits made by `re
 ```ts
 Interceptor.attach(search, {
   request: {
-    onLeave(request, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(req, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook', endpointId,
-        json: { method: request.method!, path: request.path! }
+        json: { method: req.method!, path: req.path! }
       }] };
     }
   }
@@ -112,15 +114,15 @@ Runs before forwarding a response downstream. With `read.body.mode: "json"` and 
 ```ts
 Interceptor.attach(search, {
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 ```
 
-`response.request` is read-only. It cannot change a request that has already been forwarded.
+`res.request` is read-only. It cannot change a request that has already been forwarded.
 
 ## response.onLeave {#response-onleave}
 
@@ -129,12 +131,12 @@ Runs after successful local forwarding of a response. Receipt or processing by t
 ```ts
 Interceptor.attach(search, {
   response: {
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return { actions: [{
         type: 'webhook', endpointId,
-        json: { path: response.request.path!, status: response.status! }
+        json: { path: res.request.path!, status: res.status! }
       }] };
     }
   }
@@ -158,7 +160,7 @@ Keep the plugin UUID `id` after publication and increment `version` for changes.
 
 `write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Method, URL, headers and status cannot be changed.
 
-`endpointBindings` is required and lists names used to construct webhook-shaped actions in synthetic tests; use `[]` when no names are needed. Synthetic tests may supply a test ID through `config.endpoints.preview`. Live processing supplies no endpoint IDs, so the examples return without an action when the ID is absent. Matching already checks the host and method. Settings are available as `config.settings`.
+`endpointBindings` is required and lists names used to construct webhook-shaped actions in synthetic tests; use `[]` when no names are needed. Synthetic tests may supply a test ID through `cfg.endpoints.preview`. Live processing supplies no endpoint IDs, so the examples return without an action when the ID is absent. Matching already checks the host and method. Settings are available as `cfg.settings`.
 
 Legacy schema 1 `onRequest` and `onResponse` remain available for existing synthetic tests. Do not define them in a four-hook source. Schema 1 packages cannot be activated on live traffic.
 

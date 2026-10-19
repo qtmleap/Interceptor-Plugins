@@ -70,12 +70,12 @@ declare namespace Interceptor {
   type Outcome = Result | void;
   interface Hooks {
     request?: {
-      onEnter?(request: RequestLeg, config: Config): Outcome;
-      onLeave?(request: ReadOnlyRequestLeg, config: Config): Outcome;
+      onEnter?(req: RequestLeg, cfg: Config): Outcome;
+      onLeave?(req: ReadOnlyRequestLeg, cfg: Config): Outcome;
     };
     response?: {
-      onEnter?(response: ResponseLeg, config: Config): Outcome;
-      onLeave?(response: ReadOnlyResponseLeg, config: Config): Outcome;
+      onEnter?(res: ResponseLeg, cfg: Config): Outcome;
+      onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome;
     };
   }
   /** Registers callbacks for one declared match; a source may call this up to 16 times. */

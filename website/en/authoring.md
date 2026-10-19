@@ -38,19 +38,21 @@ const search: Interceptor.Match = {
 
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     }
   },
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 ```
+
+`req` is the request, `res` is the response, and `cfg` is plugin configuration. This example does not use `cfg`; you can omit the second parameter when configuration is unnecessary.
 
 These callbacks change fields only when the body is a JSON object. Missing bodies and arrays remain unchanged. `attach` already checks the host and method, so callbacks need no repeated target guards.
 

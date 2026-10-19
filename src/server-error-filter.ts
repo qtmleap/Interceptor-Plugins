@@ -3,23 +3,23 @@ const serverError: Interceptor.Match = { hosts: ['example.com'], status: { min: 
 
 Interceptor.attach(serverError, {
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 
 Interceptor.attach(serverError, {
   response: {
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return {
         actions: [{
           type: 'webhook',
           endpointId,
-          json: { host: response.request.host!, status: response.status! }
+          json: { host: res.request.host!, status: res.status! }
         }]
       };
     }

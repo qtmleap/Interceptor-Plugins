@@ -3,23 +3,23 @@ const search: Interceptor.Match = { hosts: ['api.example.com'], methods: ['POST'
 
 Interceptor.attach(search, {
   request: {
-    onEnter(request) {
-      if (!request.body || typeof request.body !== 'object' || Array.isArray(request.body)) return;
-      request.body.limit = 5;
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
     }
   }
 });
 
 Interceptor.attach(search, {
   request: {
-    onLeave(request, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(req, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return {
         actions: [{
           type: 'webhook',
           endpointId,
-          json: { summary: request.method + ' ' + request.host + request.path }
+          json: { summary: req.method + ' ' + req.host + req.path }
         }]
       };
     }
@@ -28,23 +28,23 @@ Interceptor.attach(search, {
 
 Interceptor.attach(search, {
   response: {
-    onEnter(response) {
-      if (!response.body || typeof response.body !== 'object' || Array.isArray(response.body)) return;
-      response.body.maintenance = true;
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
     }
   }
 });
 
 Interceptor.attach(search, {
   response: {
-    onLeave(response, config) {
-      const endpointId = config.endpoints?.preview;
+    onLeave(res, cfg) {
+      const endpointId = cfg.endpoints?.preview;
       if (!endpointId) return;
       return {
         actions: [{
           type: 'webhook',
           endpointId,
-          json: { path: response.request.path!, status: response.status! }
+          json: { path: res.request.path!, status: res.status! }
         }]
       };
     }
