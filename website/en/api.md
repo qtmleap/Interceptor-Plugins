@@ -15,6 +15,8 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 `Interceptor.attach(hooks)` registers the handlers in this file. The build derives host, path and method from its location and emits the declared request/response hooks into the manifest. JavaScript passes no target conditions or IDs.
 
+The `webhook` actions in the code are an output format for synthetic tests. They do not send HTTP requests, and live processing does not save or deliver them.
+
 Place this code in `hooks/api.example.com/search/POST.ts` to handle `POST https://api.example.com/search`. Interceptor uses the generated manifest to select the matching route and hook, then loads and executes the corresponding JavaScript file.
 
 ```ts
@@ -144,7 +146,7 @@ Input is read-only. Returned intents appear in synthetic tests. Live processing 
 
 <<< ../../plugins/request-summary/plugin.json{json}
 
-Keep the plugin UUID `id` after publication and increment `version` for changes. Each plugin can contain up to 16 route files. Each file makes one top-level `attach` call defining only the callbacks it needs. Declare only the required reads:
+Keep the plugin UUID `id` after publication and increment `version` for changes. Each plugin can contain up to 16 hook files. The folders and file name under `hooks/` specify each file’s target host, path and method. Each file makes one top-level `attach` call defining only the callbacks it needs. Declare only the required reads:
 
 - `metadata`: fields such as `method`, `host`, `path` and `status`.
 - `headers`: readable header names.

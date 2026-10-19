@@ -95,7 +95,7 @@ Interceptor.attach({
 
 ## テストを書く
 
-`fixtures/cases.json`に、入力と期待する結果を追加します。スキーマ2のテストでは`phase`に4つのHook名のいずれかを指定します。
+`fixtures/cases.json`に入力と期待する結果を追加します。ここに書いたケースは`bun run check`で実行します。スキーマ2のテストでは`phase`に4つのHook名のいずれかを指定します。
 
 ```json
 {
@@ -129,7 +129,7 @@ bun run check
 bun run build
 ```
 
-`check:authoring`は型チェック、テスト、パッケージ生成を、`check`はさらに署名と改ざん検出などを検証します。`build`は未署名の開発用パッケージを`build/site/`に生成します。出力先は存在しないか空である必要があります。前回の生成物だけを片付けてから再実行してください。
+`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。`build`は未署名の開発用パッケージを`build/site/`に生成します。出力先は存在しないか空である必要があります。前回の生成物だけを片付けてから再実行してください。
 
 `build/manifests/NAME.json`にmanifest、`build/scripts/NAME/`にJavaScriptが生成されます。パッケージは`{manifest, sourceFiles}`という構成で、`manifest.matches`に対象条件とHookごとのファイル名、`sourceFiles`に各JSファイルの本文が入ります。生成物は直接編集したりcommitしたりせず、ソースを変更してビルドし直します。公開済みの内容を変えるときは`plugin.json`の`version`を上げます。
 

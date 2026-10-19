@@ -86,12 +86,18 @@ class FilesystemHooksTests(Case):
         saved = root / 'outside.ts'; path.rename(saved); path.symlink_to(saved)
         self.fails(self.build(root))
 
+    def test_json_property_named_interceptor_is_not_a_host_api_reference(self):
+        root = self.routed_root()
+        self.route(root, source="Interceptor.attach({request:{onEnter(req){const value={Interceptor:'ok'};req.body.Interceptor=value.Interceptor;const {Interceptor: item}=req.body;req.body.item=item;const {Interceptor}=req.body;req.body.same=Interceptor;}}});")
+        self.ok(self.build(root))
+
     def test_attach_cannot_be_aliased_or_called_indirectly(self):
         direct = "Interceptor.attach({request:{onEnter(req){}}});"
         for index, extra in enumerate(("const again = Interceptor.attach; again({request:{onEnter(req){}}});",
                                        "Interceptor.attach.call(null,{request:{onEnter(req){}}});",
                                        "const host = Interceptor; host.attach({request:{onEnter(req){}}});",
-                                       "Interceptor['attach']({request:{onEnter(req){}}});")):
+                                       "Interceptor['attach']({request:{onEnter(req){}}});",
+                                       "globalThis.Interceptor.attach({request:{onEnter(req){}}});")):
             root = self.routed_root(); self.route(root, source=direct + extra)
             self.fails(self.build(root, 'indirect-' + str(index)))
 

@@ -23,12 +23,17 @@ const isAttach = node => ts.isCallExpression(node) && ts.isPropertyAccessExpress
   && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
   && node.expression.name.text === 'attach';
 
-function staticHooks(source) {
+function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
   const references = [];
   const walk = (node, parent) => {
-    if (isAttach(node)) calls.push(node);
-    if (ts.isIdentifier(node) && node.text === 'Interceptor' && !ts.isQualifiedName(parent)) references.push(node);
+    if (isAttach(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) calls.push(node);
+    if ((ts.isIdentifier(node) || ts.isStringLiteral(node)) && !ts.isQualifiedName(parent) && !ts.isTypeQueryNode(parent)) {
+      const symbol = ts.isShorthandPropertyAssignment(parent) && parent.name === node
+        ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
+      if (globalObject && symbol === globalObject) throw new Error(`${source.fileName}: access the host only through the direct Interceptor.attach call`);
+      if (symbol === namespace) references.push(node);
+    }
     ts.forEachChild(node, child => walk(child, node));
   };
   walk(source, source);
@@ -103,7 +108,10 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     ts.forEachChild(node, inspect);
   }
   inspect(source);
-  const hooks = routed ? staticHooks(source) : null;
+  const checker = program.getTypeChecker();
+  const namespace = program.getSourceFile(sdk).statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
+  const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
+  const hooks = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
     getCanonicalFileName: f => f, getCurrentDirectory: () => root, getNewLine: () => '\n',

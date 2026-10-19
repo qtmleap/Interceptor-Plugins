@@ -9,13 +9,13 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 # Examples
 
-Each example contains an authored TypeScript file and a `plugin.json` for metadata and permissions. Both use the schema 2 format under development. Inputs and expectations are in `fixtures/cases.json`. Returned webhook intents appear in synthetic-test results. Live processing does not save or deliver them.
+Each example contains an authored TypeScript file and a `plugin.json` for metadata and permissions. Both use the schema 2 format under development. Inputs and expectations are in `fixtures/cases.json`. The `webhook` actions below are an output format for synthetic tests. They do not send HTTP requests, and live processing does not save or deliver them.
 
 <HookFlow locale="en" />
 
 ## Request summary {#request-summary}
 
-Targets `POST api.example.com/search`. `request.onEnter` changes `limit` to `5`; `response.onEnter` adds `maintenance: true`. The leave callbacks build intents from the forwarded data.
+Request summary combines JSON changes with test summary actions built from forwarded data. It targets `POST api.example.com/search`. `request.onEnter` changes `limit` to `5`; `response.onEnter` adds `maintenance: true`. The leave callbacks build intents from the forwarded data.
 
 `plugins/request-summary/hooks/api.example.com/search/POST.ts`
 
@@ -27,7 +27,7 @@ This file defines all four callbacks in one `Interceptor.attach` call. To handle
 
 ## Server error filter {#server-error-filter}
 
-Handles responses to `GET https://example.com/`. The file location selects the host, path and method; the callbacks check for a 5xx status. Only those responses receive `maintenance: true` before forwarding and produce a host/status test action afterward.
+In Server error filter, “filter” means processing only 5xx responses; it does not remove errors or block traffic. It handles responses to `GET https://example.com/`. The file location selects the host, path and method; the callbacks check for a 5xx status. Only those responses receive `maintenance: true` before forwarding and produce a host/status test action afterward.
 
 `plugins/server-error-filter/hooks/example.com/GET.ts`
 

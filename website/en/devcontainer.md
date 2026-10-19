@@ -20,7 +20,7 @@ To initialize your own signed repository, sign in with `gh auth login` inside th
 
 ## Resume setup after authentication stops it
 
-Attach to the existing running container and run these commands inside it. The final command resumes the lifecycle and installs dependencies after login.
+Attach to the existing running container and run these commands inside it. After GitHub login, `commitguard/setup` repeats the authentication check required for Git operations. `postCreateCommand.sh` then resumes initial setup, including dependency installation.
 
 ```sh
 cd /home/vscode/app

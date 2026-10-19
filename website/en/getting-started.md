@@ -9,7 +9,9 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 # Getting started
 
-The schema 2 format and live HTTP hooks described here are under development. The four hooks require an Interceptor build supporting them. Import a plugin, test it with synthetic JSON, then approve its exact revision for live use. Plugin development also runs on Linux.
+An Interceptor build supporting schema 2 and live HTTP hooks is being prepared for distribution. Its version and download location will be announced when published. For now, use the Rust simulator's synthetic tests on Linux or macOS, as described in [Authoring](authoring.md).
+
+The app steps below apply after that build is published. Importing a plugin does not apply it to live traffic. Run synthetic tests while it is disabled, then separately approve the revision for live use.
 
 ## Add the repository
 
@@ -61,7 +63,7 @@ A synthetic test runs one phase. Selecting a leave phase does not send traffic; 
 
 ## Use on live traffic
 
-For a schema 2 script, follow these steps. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
+After the compatible build is published, follow these steps for a schema 2 script. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
 
 <HookFlow locale="en" />
 

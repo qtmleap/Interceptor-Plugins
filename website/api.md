@@ -15,6 +15,8 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 `Interceptor.attach(hooks)`で、このファイルの処理を登録します。ビルドはファイルの配置場所からホスト・パス・メソッドを読み取り、`request`・`response`内のHook定義とともにmanifestへ書き出します。JavaScriptから対象条件やIDは渡しません。
 
+コード中の`webhook`アクションは合成テストの出力形式です。実際のHTTP送信は行わず、実通信でも保存・送信しません。
+
 次のコードを`hooks/api.example.com/search/POST.ts`に置くと、`POST https://api.example.com/search`の処理になります。Interceptorは生成されたmanifestで通信条件とHookを判定し、対応するJSファイルをロードして実行します。
 
 ```ts
@@ -148,7 +150,7 @@ Interceptor.attach({
 
 <<< ../plugins/request-summary/plugin.json{json}
 
-`id`は公開後も維持するプラグインのUUID、`version`は変更時に上げるバージョンです。1つのプラグインに最大16個のルートファイルを置けます。各ファイルではトップレベルで`attach`を1回呼び、必要なHookを定義します。`read`には、処理に必要な情報だけを指定します。
+`id`は公開後も維持するプラグインのUUID、`version`は変更時に上げるバージョンです。1つのプラグインに最大16個のHookファイルを置けます。各ファイルは`hooks/`以下のフォルダー構成とファイル名で、対象のホスト・パス・メソッドを指定します。各ファイルではトップレベルで`attach`を1回呼び、必要なHookを定義します。`read`には、処理に必要な情報だけを指定します。
 
 - `metadata`: `method`、`host`、`path`、`status`などの項目
 - `headers`: 読み取るヘッダー名

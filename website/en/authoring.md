@@ -99,7 +99,7 @@ to:
 
 ## Test cases
 
-Add input and expected output in `fixtures/cases.json`. V2 uses `phase` with one of the four hook names:
+Add input and expected output in `fixtures/cases.json`. Run these cases with `bun run check`. V2 uses `phase` with one of the four hook names:
 
 ```json
 {
@@ -128,7 +128,7 @@ bun run check
 bun run build
 ```
 
-`check:authoring` runs type checks, tests and package generation; `check` also covers signatures and tamper detection. `build` creates unsigned development packages in `build/site/`, which must be absent or empty. Remove only previous generated output before retrying.
+`check:authoring` runs type checks, tool tests and package generation; `check` also executes `fixtures/cases.json` and checks signatures and tamper detection. `build` creates unsigned development packages in `build/site/`, which must be absent or empty. Remove only previous generated output before retrying.
 
 The build writes the manifest to `build/manifests/NAME.json` and JavaScript to `build/scripts/NAME/`. The package is `{manifest, sourceFiles}`: `manifest.matches` contains target conditions and hook-to-file references, while `sourceFiles` contains each file’s JavaScript. Do not edit or commit generated files. Increment `version` in `plugin.json` when published content changes.
 

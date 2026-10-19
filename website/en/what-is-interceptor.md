@@ -20,7 +20,7 @@ Plugins add JavaScript processing to traffic handled by Interceptor. Place a fil
 Package your processing as a plugin and load it in Interceptor. You can also sign plugins and share them through a repository.
 
 ::: info
-The schema 2 format and live HTTP hooks described in this guide are under development.
+An Interceptor build supporting schema 2 and live HTTP hooks is being prepared for distribution. Its version and download location will be announced when published. For now, try synthetic tests with the Rust simulator in [Authoring](authoring.md).
 :::
 
 ## Use cases
@@ -41,6 +41,6 @@ Plugins operate on traffic configured for Interceptor's proxy and approved by th
 
 ## Get started
 
-- [Getting started](getting-started.md): Import a published plugin, test it, then apply it to traffic.
+- [Getting started](getting-started.md): Check compatible-build availability and the steps to follow after publication.
 - [Write a plugin](authoring.md): Use TypeScript to change JSON and test the result.
 - [Publishing](publishing.md): Sign your plugins and share them through a repository.
