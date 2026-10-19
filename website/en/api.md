@@ -13,9 +13,9 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 ## Interceptor.attach
 
-`Interceptor.attach(hooks)` registers the handlers in this file. The build derives host, path and method from its location and emits the declared request/response hooks into the manifest. JavaScript passes no target conditions or IDs.
+`Interceptor.attach(hooks)` registers the handlers in this file. The build derives host, path and method from its location and emits the declared request/response hooks into the manifest. Pass no target conditions or plugin ID to `attach`.
 
-The `webhook` actions in the code are an output format for synthetic tests. They do not send HTTP requests, and live processing does not save or deliver them.
+`actions` is the array of actions returned by a hook. The `webhook` type describes an intended notification containing an `endpointId` and JSON data. Use an ID from `cfg.endpoints` for `endpointId`, rather than a destination URL. Synthetic tests display the action's contents without sending HTTP requests. Current live processing does not save or deliver returned actions.
 
 Place this code in `hooks/api.example.com/search/POST.ts` to handle `POST https://api.example.com/search`. Interceptor uses the generated manifest to select the matching route and hook, then loads and executes the corresponding JavaScript file.
 
@@ -83,7 +83,7 @@ Assign `req.body = { query: 'example', limit: 5 }` to replace the entire body. U
 
 ## request.onLeave {#request-onleave}
 
-Runs after successful local forwarding of the request. It sees edits made by `request.onEnter`. This does not guarantee that the server received or processed the request. Failed forwards do not call it.
+Reads the forwarded request after successful local forwarding. Input is read-only and includes edits made by `request.onEnter`. This does not guarantee that the server received or processed the request. Failed forwards do not call it.
 
 ```ts
 Interceptor.attach({
@@ -100,7 +100,7 @@ Interceptor.attach({
 });
 ```
 
-Input is read-only; attempted body edits are errors. Returned actions appear in synthetic-test results. Live processing does not save or deliver them, despite the `webhook` type name.
+Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver returned actions.
 
 ## response.onEnter {#response-onenter}
 
@@ -121,7 +121,7 @@ Interceptor.attach({
 
 ## response.onLeave {#response-onleave}
 
-Runs after successful local forwarding of a response. Receipt or processing by the client is not guaranteed. Failed forwards do not call it.
+Reads the forwarded response after successful local forwarding. Input is read-only. Receipt or processing by the client is not guaranteed. Failed forwards do not call it.
 
 ```ts
 Interceptor.attach({
@@ -138,7 +138,7 @@ Interceptor.attach({
 });
 ```
 
-Input is read-only. Returned intents appear in synthetic tests. Live processing does not save or deliver them.
+Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver returned actions.
 
 ## Manifest and permissions
 
@@ -163,9 +163,13 @@ The generated package is `{manifest, sourceFiles}`. `manifest.matches` contains 
 
 Before each phase, Interceptor checks the traffic conditions and requested hook against the manifest, then evaluates only the matching file in a fresh runtime. Files that do not match are not executed. Variables outside a callback cannot carry state from `onEnter` to `onLeave`.
 
-Live JSON processing requires an uncompressed UTF-8 `application/json` or `+json` body of at most 24 KiB. Compressed or large bodies, SSE, protocol upgrades, `Expect: 100-continue`, HEAD and bodyless responses bypass body hooks. Buffered or queued connection data is bounded at 64 KiB.
+Live JSON processing requires an uncompressed UTF-8 `application/json` or `+json` body of at most 24 KiB. Compressed or large bodies, SSE, `Expect: 100-continue`, HEAD and bodyless responses bypass body hooks. Retained bodies, queued data, pending writes and bodies held by `onLeave` share a 64 KiB connection limit.
 
-Script errors and timeouts forward the original traffic. Revoked approval closes the connection. Execution is synchronous: no `fetch`, promises, timers, files, Node APIs or browser APIs.
+Upgrade requests and nested CONNECT requests within a decrypted connection receive `501` after earlier responses, then the connection closes. An unsolicited `101` response also closes the connection.
+
+The app's shared processor runs one hook phase at a time, with at most eight waiting. An overloaded `onEnter` forwards the original traffic. Each connection allows at most four in-flight `onLeave` notifications; excess notifications are dropped while forwarding continues. Notification execution is not guaranteed.
+
+Script errors and timeouts forward the original traffic. Revoked capture consent or plugin approval closes the connection. Execution is synchronous: no `fetch`, promises, timers, files, Node APIs or browser APIs.
 
 Per invocation: 50 ms, 8 MiB heap, 128 KiB total plugin source, 64 KiB event, 8 KiB config, 32 KiB result and at most two actions.
 

@@ -124,12 +124,16 @@ Interceptor.attach({
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
+bun run build:dev
 bun run check:authoring
 bun run check
-bun run build
 ```
 
-`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。`build`は未署名の開発用パッケージを`build/site/`に生成します。出力先は存在しないか空である必要があります。前回の生成物だけを片付けてから再実行してください。
+`build:dev`は未署名のパッケージを`build/dev/plugins/NAME.json`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
+
+`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。従来の`bun run build`は`build/site/`に生成し、出力先が存在しないか空であることを求めます。
+
+VS CodeではSDKの型で各Hookファイルをチェックし、JavaScriptは出力しません。ビルド用と検証用のタスクも選べます。ファイルの配置や使える構文は、ビルド時にも確認します。
 
 `build/manifests/NAME.json`にmanifest、`build/scripts/NAME/`にJavaScriptが生成されます。パッケージは`{manifest, sourceFiles}`という構成で、`manifest.matches`に対象条件とHookごとのファイル名、`sourceFiles`に各JSファイルの本文が入ります。生成物は直接編集したりcommitしたりせず、ソースを変更してビルドし直します。公開済みの内容を変えるときは`plugin.json`の`version`を上げます。
 
@@ -139,7 +143,7 @@ Rust製の`interceptor-simulator`はアプリと同じQuickJSで構文と実行�
 
 ```sh
 bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
-bun run simulator run-package build/site/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
+bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
 コマンドに指定した2つの入力ファイルは、このリポジトリに含まれています。`fixtures/request-event.json`は通信データ、`fixtures/config.json`はHookの第2引数に渡す設定です。
@@ -150,7 +154,7 @@ bun run simulator run-package build/site/plugins/request-summary.json request.on
 
 自分のAPIを試すときは、これらをコピーして入力を変更します。`fixtures/cases.json`は期待結果まで記載したテストケース集で、`run-package`にそのまま渡すファイルではありません。
 
-`check`は構文だけを検査し、処理は実行しません。`run-package`はパッケージのmanifestから、入力の通信条件とHookに合うファイルを選んで実行します。条件判定・権限・JSONの変更を含む結果を表示し、一致しないファイルは実行しません。転送やWebhook送信は行いません。実際のネットワーク上の順序はアプリ側で確認します。
+シミュレーターの`check`サブコマンドは、生成されたJavaScriptの構文だけを検査し、Hookの処理は実行しません。`run-package`サブコマンドはパッケージのmanifestから、入力の通信条件とHookに合うファイルを選んで実行します。条件判定・権限・JSONの変更を含む結果を表示し、一致しないファイルは実行しません。転送やWebhook送信は行いません。実際のネットワーク上の順序はアプリ側で確認します。
 
 ビルド後は`.tools/bin/interceptor-simulator`を直接実行できます。同じOS・CPU向けのバイナリなら、実行時にBun、Python、Rust、Xcodeは不要です。Linux版にはビルド先と互換性のあるシステムライブラリが必要です。
 

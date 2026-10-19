@@ -7,6 +7,7 @@
   },
   "scripts": {
     "build": "python3 tools/build.py --root . --output build/site",
+    "build:dev": "python3 tools/build_dev.py --root .",
     "check": "tools/check.sh",
     "setup": "python3 tools/setup.py --root .",
     "check:authoring": "tools/check-authoring.sh",

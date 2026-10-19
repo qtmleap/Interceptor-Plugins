@@ -123,12 +123,16 @@ The runtime produces `mutation`; callback authors only edit `body`. Use `expectE
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
+bun run build:dev
 bun run check:authoring
 bun run check
-bun run build
 ```
 
-`check:authoring` runs type checks, tool tests and package generation; `check` also executes `fixtures/cases.json` and checks signatures and tamper detection. `build` creates unsigned development packages in `build/site/`, which must be absent or empty. Remove only previous generated output before retrying.
+`build:dev` generates unsigned packages in `build/dev/plugins/NAME.json`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
+
+`check:authoring` runs type checks, tool tests and package generation; `check` also executes `fixtures/cases.json` and checks signatures and tamper detection. The existing `bun run build` writes to `build/site/`, which must be absent or empty.
+
+VS Code checks each hook file with the SDK types without emitting JavaScript. Build and authoring-check tasks are available. The build still validates file locations and allowed syntax.
 
 The build writes the manifest to `build/manifests/NAME.json` and JavaScript to `build/scripts/NAME/`. The package is `{manifest, sourceFiles}`: `manifest.matches` contains target conditions and hook-to-file references, while `sourceFiles` contains each file’s JavaScript. Do not edit or commit generated files. Increment `version` in `plugin.json` when published content changes.
 
@@ -138,7 +142,7 @@ The build writes the manifest to `build/manifests/NAME.json` and JavaScript to `
 
 ```sh
 bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
-bun run simulator run-package build/site/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
+bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
 Both input files are included in this repository. `fixtures/request-event.json` supplies traffic data, while `fixtures/config.json` supplies the callback's second argument:
@@ -149,7 +153,7 @@ Both input files are included in this repository. `fixtures/request-event.json` 
 
 Copy and edit them for your API. `fixtures/cases.json` also contains expectations and cannot be passed directly to `run-package`.
 
-`check` parses syntax without executing the source. `run-package` uses the package’s manifest to select the file for the input traffic and requested hook, then validates permissions and JSON changes. Nonmatching files are not executed. The simulator does not forward traffic or deliver webhooks. Verify actual network ordering in the app.
+The simulator's `check` subcommand parses generated JavaScript without executing the hook. Its `run-package` subcommand uses the package’s manifest to select the file for the input traffic and requested hook, then validates permissions and JSON changes. Nonmatching files are not executed. The simulator does not forward traffic or deliver webhooks. Verify actual network ordering in the app.
 
 After building, run `.tools/bin/interceptor-simulator` directly. A binary for the same OS/CPU does not require Bun, Python, Rust or Xcode at runtime. Linux still requires compatible system libraries.
 
