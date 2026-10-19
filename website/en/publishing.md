@@ -10,7 +10,7 @@ How to create and distribute your own repository.
 ## Steps
 
 1. Select **Use this template**, create a **public** repository with default branch **master**, and clone it. If you clone directly, set `origin` to your own GitHub repository first.
-2. On a supported Mac with GitHub CLI signed in as a repository administrator, run:
+2. On Linux or macOS with GitHub CLI signed in as a repository administrator, run:
 
    ```sh
    bun install --frozen-lockfile --ignore-scripts
@@ -42,8 +42,8 @@ Share the public fingerprint through an independently trusted channel too. A val
 
 For key handling, recovery and post-deployment verification, see the [maintenance and publishing guide (docs/maintaining.md)](https://github.com/%%GITHUB_REPOSITORY%%/blob/master/docs/maintaining.md).
 
-## Signing and Xcode
+## Signing
 
-A plugin signature signs data with Ed25519; it is separate from Apple code signing. Signing itself does not inherently require Xcode. However, this template currently implements `bun run setup` and the signed publishing tools in Swift, and setup requires macOS with Xcode 27. Its supported signing and publishing procedure does not run on Bun alone.
+Bun's cryptography support handles Ed25519. Private keys remain raw 32-byte seeds; the app's signature format and public-key fingerprints stay compatible. Setup, checks and signed-feed generation run on Linux. Xcode and Apple code signing are not required.
 
-Editing TypeScript, type checking, generating packages and building the documentation work without Xcode. Use `bun run check:authoring` for the portable checks, and follow this page for the current signed publishing procedure.
+The publishing workflow also runs on Ubuntu. It restores the environment signing secret only after all checks pass, verifies the published files and removes its restored key on every outcome.

@@ -12,9 +12,11 @@ TASK_TEMP=$(mktemp -d /tmp/interceptor-authoring-check.XXXXXX)
 trap 'rm -rf -- "$TASK_TEMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+tools/build-runtime.sh
+export INTERCEPTOR_SIMULATOR="$TASK_ROOT/.tools/bin/interceptor-simulator"
 python3 -m unittest discover -s tests -v
 python3 -m unittest discover -s tools/tests -v
 python3 tools/build.py --root "$TASK_ROOT" --output "$TASK_TEMP/site"
 python3 tools/build.py --root "$TASK_ROOT" --output "$TASK_TEMP/repro"
 diff -qr "$TASK_TEMP/site/plugins" "$TASK_TEMP/repro/plugins"
-echo 'Portable authoring, generation and HTTPS checks passed. Run tools/check.sh on macOS for native QuickJS and signature verification.'
+echo 'Portable authoring, generation and HTTPS checks passed. Run bun run check for the pinned QuickJS bridge and signed-feed checks.'

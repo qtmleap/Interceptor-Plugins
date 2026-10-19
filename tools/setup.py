@@ -105,41 +105,19 @@ class GitHub:
 
 
 class NativeKeyTool:
-    """Use the pinned native publisher; derive only the public fingerprint on resume."""
+    """Portable Bun Ed25519 primitives, keeping the app's raw 32-byte key format."""
     def __init__(self, root):
         self.root = root
-        self.binary = None
-
-    def prepare(self):
-        if self.binary is not None:
-            return
-        _command(['bash', str(self.root / 'tools/bootstrap.sh')], cwd=self.root,
-                 what='Pinned publisher bootstrap', timeout=1800)
-        package = self.root / '.tools/interceptor/Packages/InterceptorAutomation'
-        _command(['swift', 'build', '--package-path', str(package), '--configuration', 'release',
-                  '--product', 'interceptor-repository'], cwd=self.root,
-                 what='Pinned publisher build', timeout=1800)
-        bin_path = _command(['swift', 'build', '--package-path', str(package), '--configuration', 'release',
-                             '--show-bin-path'], cwd=self.root, what='Publisher location').decode('utf-8').strip()
-        self.binary = Path(bin_path) / 'interceptor-repository'
 
     def create(self, path):
-        self.prepare()
-        output = _command([str(self.binary), 'keygen', str(path)], cwd=self.root,
-                          what='Native signing key creation').decode('utf-8').strip()
+        output = _command([sys.executable, str(self.root / 'tools/repository_tool.py'), 'keygen', str(path)],
+                          cwd=self.root, what='Signing key creation').decode('utf-8').strip()
         return check_fingerprint(output)
 
     def fingerprint(self, path):
         private_file(path, length=32)
-        # CryptoKit is the publisher's own signing implementation. The raw key is
-        # read locally by Swift; process arguments contain only its external path.
-        code = ('import Foundation; import CryptoKit; '
-                'let key = try Curve25519.Signing.PrivateKey(rawRepresentation: '
-                'Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))); '
-                'print(SHA256.hash(data: key.publicKey.rawRepresentation).map '
-                '{ String(format: "%02x", $0) }.joined())')
-        output = _command(['swift', '-e', code, str(path)], cwd=self.root,
-                          what='Native public fingerprint check', timeout=180).decode('utf-8').strip()
+        output = _command([sys.executable, str(self.root / 'tools/repository_tool.py'), 'fingerprint', str(path)],
+                          cwd=self.root, what='Public fingerprint check').decode('utf-8').strip()
         return check_fingerprint(output)
 
 
@@ -454,8 +432,6 @@ def main(argv):
     parser.add_argument('--root', required=True, type=Path)
     parser.add_argument('--state-dir', type=Path, help='private directory outside every Git checkout (default: ~/.config/interceptor/repositories/OWNER--NAME)')
     args = parser.parse_args(argv)
-    if sys.platform != 'darwin':
-        raise ToolError('Signing setup requires macOS with Xcode 27; run authoring checks in the container and initialize signing on your Mac')
     root = args.root.resolve()
     result = setup_repository(root, GitHub(), NativeKeyTool(root), state_dir=args.state_dir)
     print('Local and GitHub setup complete. No commit, push or deployment was started.')

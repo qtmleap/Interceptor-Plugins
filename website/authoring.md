@@ -7,15 +7,15 @@ lang: ja
 
 ## ファイルの構成
 
-`src/NAME.ts`、`manifests/NAME.json`、`fixtures/cases.json` を一緒に編集します。ソースとmanifestには、拡張子を除いて同じ小文字のkebab-case名を付けます。リポジトリ／プラグインのIDは初回セットアップ後に変更しません。
+`src/NAME.ts`、`manifests/NAME.json`、`fixtures/cases.json` を一緒に編集します。ソースとmanifestのファイル名は、拡張子を除いて同じ小文字のkebab-caseにします。リポジトリ／プラグインのIDは初回セットアップ後に変更しません。
 
 ## 必要なツール
 
-Bun %%BUN_VERSION%%、Python 3、OpenSSL、Gitを使います。すべての検証を行う `bun run check` には、Xcode 27 / Swift 6.4を選択したMacが必要です。Linuxでは `check:authoring` を実行できます。
+LinuxとmacOSのどちらでも同じコマンドを使えます。Bun %%BUN_VERSION%%、Python 3、OpenSSL、Git、RustとCコンパイラを用意してください。[開発コンテナ](devcontainer.md)にはこれらのツールが含まれます。
 
 ## プラグインを追加する
 
-既存のTypeScriptとmanifestをコピーし、新しい小文字のkebab-case名に変更します。拡張子を除いた名前は両方で揃えてください。manifestの `id` には重複しないUUIDを一度生成し、公開後も同じ値を使います。
+既存のTypeScriptとmanifestをコピーして、新しい小文字のkebab-case名に変更します。拡張子を除いたファイル名は、両方で統一してください。manifestの `id` には重複しないUUIDを一度生成し、公開後も同じ値を使います。
 
 ```sh
 python3 -c 'import uuid; print(uuid.uuid4())'
@@ -38,8 +38,8 @@ python3 -c 'import uuid; print(uuid.uuid4())'
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
-bun run check:authoring   # Linuxでも可: 型チェック、Python/HTTPS、決定的なパッケージ
-bun run check             # Mac: 実QuickJS、署名、テンプレート全体の検証
+bun run check:authoring   # 型チェック、Python/HTTPS、パッケージ生成
+bun run check             # QuickJS、署名、改ざん検出まで含めた検証
 bun run build             # 未署名の開発用パッケージを build/site/ に生成
 ```
 
@@ -54,21 +54,34 @@ bun run build             # 未署名の開発用パッケージを build/site/ 
 
 ## フックを書く
 
-manifestに宣言した購読に合わせ、トップレベルに `onRequest` または `onResponse` という関数を定義します。各プラグインは別々にコンパイルされるため、ファイル間で関数名が重複しても構いません。
+manifestに宣言した購読に対応するよう、トップレベルに `onRequest` または `onResponse` という関数を定義します。各プラグインは別々にコンパイルされるため、ファイル間で関数名が重複しても構いません。
 
 <<< ../src/request-summary.ts{ts}
 
-このサンプルはテスト用の `preview` バインディングと入力を使います。新しいフックを書くときは、バインディングや省略可能な入力項目の有無を確認し、必要な値がなければ `{ actions: [] }` を返してください。
+このサンプルでは、テスト用の `preview` バインディングと入力を使います。新しいフックを書くときは、バインディングや省略可能な入力項目を確認し、必要な値がなければ `{ actions: [] }` を返してください。
 
 型は [APIリファレンス](api.md) を参照してください。
 
-::: warning 将来の設計
-`Interceptor.attach` / `rewriteJsonBody` は[HTTP Hook設計](api.md#http-hooks)と[将来の例](examples.md#future-http-hooks)にありますが未実装です。現在はコンパイル、テスト、公開できません。
-:::
+
+
+## シミュレーター
+
+先に `bun run check` を実行すると、例で使う `build/scripts/request-summary.js` が生成されます。入力ファイルの内容は[APIのテスト入力](api.md#テスト入力)を参照してください。
+
+Rust製の `interceptor-simulator` は、アプリと同じQuickJSでJavaScriptを検査・実行するコマンドです。初回はバージョンを固定したQuickJSのソースを取得し、RustとCコンパイラでビルドします。
+
+```sh
+bun run simulator check build/scripts/request-summary.js
+bun run simulator run build/scripts/request-summary.js onRequest fixtures/request-event.json fixtures/config.json
+```
+
+`check` は構文だけを検査し、スクリプトを実行しません。構文が正しくても、フックが存在しないことや戻り値の不正は検出できません。入力JSONを使う `run` と、期待値まで比較する `bun run check` も実行してください。`run` が返すアクションはJSONとして表示され、Webhookは送信されません。
+
+ビルド後は `.tools/bin/interceptor-simulator` を直接実行できます。同じOS・CPU向けのバイナリなら、実行時にBun、Python、Rust、Xcodeは不要です。Linux版にはビルド先と互換性のあるシステムライブラリが必要です。
 
 ## 実行環境の制約
 
-実行環境は1つのグローバルスクリプトを評価し、フックを同期的に呼びます。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。スクリプトはアプリ内の制限付きQuickJS環境で実行されます。
+実行環境では、1つのグローバルスクリプトを評価してフックを同期的に呼び出します。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。スクリプトはアプリ内の制限付きQuickJS環境で実行されます。
 
 プレビューが返すWebhookへの送信要求（intent）は最大2件です。実際の送信や、キャプチャした通信に合わせた自動実行は行いません。SHA-256は生成されたパッケージのバイト列から計算し、署名付きの一覧がそのハッシュを認証します。
 

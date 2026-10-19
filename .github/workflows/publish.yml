@@ -65,9 +65,7 @@ jobs:
   publish:
     needs: [preflight, docs-build]
     if: github.ref == 'refs/heads/master'
-    runs-on: xcode-27
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_27.0.0.app/Contents/Developer
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     environment:
       name: github-pages
@@ -124,7 +122,7 @@ jobs:
         run: python3 tools/compose_pages.py --feed build/site --docs build/docs --output build/pages
       - name: Verify the combined signed feed
         run: |
-          verifier="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
+          verifier="$PWD/tools/repository-tool"
           "$verifier" verify-local "$PWD" build/pages --signed
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
@@ -140,7 +138,7 @@ jobs:
         uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
       - name: Read back exact sequence, signature, expiry and package hashes
         run: |
-          verifier="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
+          verifier="$PWD/tools/repository-tool"
           sequence="$(cat build/sequence.txt)"
           for attempt in 1 2 3 4 5 6; do
             if "$verifier" verify-live "$PWD" "$sequence"; then

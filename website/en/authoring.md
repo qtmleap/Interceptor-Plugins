@@ -11,7 +11,7 @@ Edit `src/NAME.ts`, `manifests/NAME.json` and `fixtures/cases.json` together. Ev
 
 ## Prerequisites
 
-Use Bun %%BUN_VERSION%%, Python 3, OpenSSL and Git. The full `bun run check` requires a Mac with Xcode 27 / Swift 6.4 selected. On Linux, run `check:authoring`.
+The same commands work on Linux and macOS. Install Bun %%BUN_VERSION%%, Python 3, OpenSSL, Git, Rust and a C compiler. The [development container](devcontainer.md) includes these tools.
 
 ## Add a plugin
 
@@ -39,7 +39,7 @@ Specify exactly one of `expected` or `expectError`. Use the [real fixtures](http
 ```sh
 bun install --frozen-lockfile --ignore-scripts
 bun run check:authoring   # works on Linux: types, Python/HTTPS, deterministic packages
-bun run check             # Mac: real QuickJS, signing and configured-template checks
+bun run check             # QuickJS, signatures and configured-template checks
 bun run build             # unsigned development packages in build/site/
 ```
 
@@ -62,9 +62,22 @@ This sample assumes the test `preview` binding and input. In a new hook, check t
 
 See the [API reference](api.md) for the types.
 
-::: warning Future design
-`Interceptor.attach` / `rewriteJsonBody` appear in [HTTP Hook design](api.md#http-hooks) and the [future example](examples.md#future-http-hooks) but are unimplemented. They cannot currently be compiled, tested or published.
-:::
+
+
+## Simulator
+
+First run `bun run check` to generate `build/scripts/request-summary.js`. See [Test input](api.md#test-input) for the JSON file contents.
+
+The Rust `interceptor-simulator` checks and runs JavaScript with the app's pinned QuickJS engine. Its first build fetches those sources and requires Rust and a C compiler.
+
+```sh
+bun run simulator check build/scripts/request-summary.js
+bun run simulator run build/scripts/request-summary.js onRequest fixtures/request-event.json fixtures/config.json
+```
+
+`check` only parses syntax and never executes the script. It cannot detect missing hooks or invalid results. Also use `run` with input JSON and `bun run check` to compare fixture expectations. Returned actions are printed as JSON; the simulator never sends webhooks.
+
+After building, run `.tools/bin/interceptor-simulator` directly. A binary for the same OS and CPU needs no Bun, Python, Rust or Xcode at runtime. Linux binaries require compatible system libraries.
 
 ## Runtime limits
 

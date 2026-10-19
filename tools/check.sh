@@ -3,17 +3,15 @@ set -euo pipefail
 TASK_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$TASK_ROOT"
 tools/check-authoring.sh
-tools/bootstrap.sh
+export INTERCEPTOR_SIMULATOR="$TASK_ROOT/.tools/bin/interceptor-simulator"
 TASK_TEMP=$(mktemp -d /tmp/interceptor-sample-check.XXXXXX)
 trap 'rm -rf -- "$TASK_TEMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 python3 tools/build.py --root "$TASK_ROOT" --output "$TASK_TEMP/site"
 cp -R "$TASK_TEMP/site" "$TASK_TEMP/repro"
-swift build --package-path .tools/interceptor/Packages/InterceptorAutomation --configuration release --product interceptor-repository > build/evidence/publisher-build.log 2>&1 || { tail -60 build/evidence/publisher-build.log; exit 1; }
-swift build --package-path tools/Verifier --configuration release > build/evidence/verifier-build.log 2>&1 || { tail -60 build/evidence/verifier-build.log; exit 1; }
-TASK_PUBLISHER="$(swift build --package-path .tools/interceptor/Packages/InterceptorAutomation --configuration release --show-bin-path)/interceptor-repository"
-TASK_VERIFIER="$(swift build --package-path tools/Verifier --configuration release --show-bin-path)/interceptor-samples-check"
+TASK_PUBLISHER="$TASK_ROOT/tools/repository-tool"
+TASK_VERIFIER="$TASK_ROOT/tools/repository-tool"
 TASK_REPO_ID=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["id"])')
 TASK_REPO_NAME=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["name"])')
 TASK_REPOSITORY=$(python3 -c 'import json; print(json.load(open("repository-config.json"))["githubRepository"])')
@@ -58,12 +56,12 @@ PY
 "$TASK_PUBLISHER" publish "$TASK_TEMP/repro" --id "$TASK_REPO_ID" --name "$TASK_REPO_NAME" --sequence 2 --key "$TASK_TEMP/test.key"
 "$TASK_VERIFIER" verify-local "$TASK_TEMP/root" "$TASK_TEMP/repro" --signed
 cp "$TASK_TEMP/repro/repository.json" "$TASK_TEMP/current-envelope.saved"
-swift tools/tests/HistoryFixture.swift "$TASK_TEMP/current-envelope.saved" "$TASK_TEMP/test.key" "$TASK_TEMP/repro/repository.json" expired
+python3 tools/tests/history_fixture.py "$TASK_TEMP/current-envelope.saved" "$TASK_TEMP/test.key" "$TASK_TEMP/repro/repository.json" expired
 [[ "$("$TASK_VERIFIER" previous "$TASK_TEMP/root" "$TASK_TEMP/repro/repository.json")" == 2 ]]
 if "$TASK_VERIFIER" verify-local "$TASK_TEMP/root" "$TASK_TEMP/repro" --signed > build/evidence/expired-import.log 2>&1; then
     echo 'expired metadata unexpectedly accepted for import' >&2; exit 1
 fi
-swift tools/tests/HistoryFixture.swift "$TASK_TEMP/current-envelope.saved" "$TASK_TEMP/test.key" "$TASK_TEMP/repro/repository.json" future
+python3 tools/tests/history_fixture.py "$TASK_TEMP/current-envelope.saved" "$TASK_TEMP/test.key" "$TASK_TEMP/repro/repository.json" future
 if "$TASK_VERIFIER" previous "$TASK_TEMP/root" "$TASK_TEMP/repro/repository.json" > build/evidence/future-history.log 2>&1; then
     echo 'future-issued metadata unexpectedly accepted for renewal' >&2; exit 1
 fi
