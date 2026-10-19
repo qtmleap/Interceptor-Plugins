@@ -21,7 +21,7 @@ Open **Settings → Plugins → + → Add Repository** and enter:
 %%REPOSITORY_URL%%
 ```
 
-Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect its source and manifest.
+Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect its source and manifest, which declares targets, permissions and other plugin metadata.
 
 ## Verifying trust
 
@@ -49,9 +49,9 @@ Synthetic tests execute input JSON without sending live traffic or webhooks.
 
 1. Select a package and inspect its source and manifest.
 2. Import it disabled.
-3. Open the script, select a phase and input JSON, and run the synthetic test.
+3. Open the script and select a hook. Enter JSON containing traffic metadata as well as the HTTP body, then run the synthetic test.
 
-For [Request summary](examples.md#request-summary), select `request.onEnter` and paste the full event below into the input JSON field. The input includes traffic metadata as well as the HTTP body.
+For [Request summary](examples.md#request-summary), select `request.onEnter` and paste the full event below into the input JSON field.
 
 <<< ../../fixtures/request-event.json{json}
 

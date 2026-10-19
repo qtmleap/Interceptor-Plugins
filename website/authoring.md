@@ -141,7 +141,7 @@ bun run simulator run build/scripts/request-summary.js request.onEnter fixtures/
 
 自分のAPIを試すときは、これらをコピーして入力を変更します。`fixtures/cases.json`は期待結果まで記載したテストケース集で、`run`にそのまま渡すファイルではありません。
 
-`check`は構文だけを検査し、処理は実行しません。`run`は指定した1つのHookを実行し、条件判定・権限・JSONの変更を含む結果を表示します。v2では`--manifest`が必要です。転送やWebhook送信は行いません。実際のネットワーク上の順序はアプリ側で確認します。
+`check`は構文だけを検査し、処理は実行しません。`run`は指定した1つのHookを実行し、条件判定・権限・JSONの変更を含む結果を表示します。スキーマ2のプラグインを実行する場合は`--manifest`が必要です。転送やWebhook送信は行いません。実際のネットワーク上の順序はアプリ側で確認します。
 
 ビルド後は`.tools/bin/interceptor-simulator`を直接実行できます。同じOS・CPU向けのバイナリなら、実行時にBun、Python、Rust、Xcodeは不要です。Linux版にはビルド先と互換性のあるシステムライブラリが必要です。
 

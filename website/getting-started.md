@@ -21,7 +21,7 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 %%REPOSITORY_URL%%
 ```
 
-追加前のプレビュー画面ではリポジトリ名とスクリプト数を確認できます。署名付きの場合は、署名鍵のフィンガープリントも表示されます。ソースとmanifestは、リポジトリの追加後に各スクリプトの詳細画面で確認します。
+追加前のプレビュー画面ではリポジトリ名とスクリプト数を確認できます。署名付きの場合は、署名鍵のフィンガープリントも表示されます。ソースと、対象条件や権限などを定義したmanifestは、リポジトリの追加後に各スクリプトの詳細画面で確認します。
 
 ## 信頼の確認
 
@@ -49,9 +49,9 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 1. 一覧からパッケージを選び、ソースとmanifestを確認します。
 2. 無効な状態で読み込みます。
-3. スクリプトの詳細を開き、試すHookと入力JSONを選んで合成テストを実行します。
+3. スクリプトの詳細を開き、試すHookを選びます。HTTP本文だけでなくホストなどの通信情報も含むJSONを入力し、合成テストを実行します。
 
-[Request summary](examples.md#request-summary)なら、`request.onEnter`を選び、入力JSONに次の内容を指定します。HTTPの本文だけでなく、テスト用の通信情報全体を渡します。
+[Request summary](examples.md#request-summary)なら、`request.onEnter`を選び、入力JSONに次の内容を指定します。
 
 <<< ../fixtures/request-event.json{json}
 

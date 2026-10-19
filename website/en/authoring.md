@@ -138,7 +138,7 @@ Both input files are included in this repository. `fixtures/request-event.json` 
 
 Copy and edit them for your API. `fixtures/cases.json` also contains expectations and cannot be passed directly to `run`.
 
-`check` compiles without executing. `run` executes one phase and validates matching, grants and edits; v2 requires `--manifest`. It does not forward traffic or deliver webhooks. Verify actual network ordering in the app.
+`check` compiles without executing. `run` executes one phase and validates matching, grants and edits. Running a schema 2 plugin requires `--manifest`. It does not forward traffic or deliver webhooks. Verify actual network ordering in the app.
 
 After building, run `.tools/bin/interceptor-simulator` directly. A binary for the same OS/CPU does not require Bun, Python, Rust or Xcode at runtime. Linux still requires compatible system libraries.
 

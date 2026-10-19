@@ -26,7 +26,7 @@ Setup writes repository and plugin IDs, the feed URL and public-key fingerprint 
 
 After an interruption, keep the private key and checkpoint and rerun `bun run setup`. It resumes with the same IDs and key; do not delete the checkpoint or regenerate a key to investigate a failure. It refuses to overwrite an existing key or secret whose ownership it cannot establish. See the maintainer guide below for recovery.
 
-Unsigned local feeds are available for development and require the app's unverified-repository acknowledgment. Official signed publication never falls back to unsigned metadata.
+The repository's distribution data is called a feed. Unsigned local feeds are available for development and require the app's unverified-repository acknowledgment. Official signed publication never falls back to unsigned metadata.
 
 ## Signing and publishing with GitHub Actions
 
