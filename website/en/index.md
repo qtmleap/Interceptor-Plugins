@@ -14,8 +14,8 @@ hero:
       text: Write a plugin
       link: /en/authoring
     - theme: alt
-      text: Try it in the app
-      link: /en/getting-started
+      text: What is Interceptor?
+      link: /en/what-is-interceptor
 features:
   - icon:
       src: /icons/filter.svg

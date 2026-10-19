@@ -17,6 +17,7 @@ const textsFor = (relativePath: string) => (relativePath.startsWith('en/') ? tex
 
 const labels = {
   root: {
+    'what-is-interceptor': 'Interceptorとは',
     'getting-started': 'はじめに',
     authoring: '作成',
     api: 'API',
@@ -25,6 +26,7 @@ const labels = {
     devcontainer: '開発コンテナー'
   },
   en: {
+    'what-is-interceptor': 'What is Interceptor?',
     'getting-started': 'Getting started',
     authoring: 'Authoring',
     api: 'API',
@@ -37,7 +39,7 @@ const labels = {
 function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
   const prefix = locale === 'root' ? '/' : '/en/'
   return [
-    { text: locale === 'root' ? 'ガイド' : 'Guide', link: `${prefix}getting-started`, activeMatch: '/(getting-started|authoring|examples|publishing|devcontainer)' },
+    { text: locale === 'root' ? 'ガイド' : 'Guide', link: `${prefix}what-is-interceptor`, activeMatch: '/(what-is-interceptor|getting-started|authoring|examples|publishing|devcontainer)' },
     { text: locale === 'root' ? 'リファレンス' : 'Reference', link: `${prefix}api`, activeMatch: '/api' }
   ]
 }
@@ -54,7 +56,7 @@ function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
     ['response.onLeave', 'response-onleave']
   ]
   const guide: DefaultTheme.SidebarItem[] = [
-    { text: ja ? '導入' : 'Introduction', items: [page('getting-started')] },
+    { text: ja ? '導入' : 'Introduction', items: [page('what-is-interceptor'), page('getting-started')] },
     { text: ja ? 'プラグイン' : 'Plugins', items: [page('authoring'), page('examples')] },
     { text: ja ? '開発と公開' : 'Development and publishing', items: [page('devcontainer'), page('publishing')] },
     { items: [{ text: ja ? 'APIリファレンス' : 'API reference', link: `${prefix}api` }] }
@@ -71,7 +73,7 @@ function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
       referenceLink(ja ? '実行条件と制限' : 'Execution and limits', ja ? '実行条件と制限' : 'execution-and-limits'),
       referenceLink(ja ? '型宣言' : 'Types', ja ? '型宣言' : 'types')
     ] },
-    { items: [{ text: ja ? 'ガイド' : 'Guide', link: `${prefix}getting-started` }] }
+    { items: [{ text: ja ? 'ガイド' : 'Guide', link: `${prefix}what-is-interceptor` }] }
   ]
   // Flat routes have equal depth; keep the specific API prefix before the guide fallback.
   return { [`${prefix}api`]: reference, [prefix]: guide }

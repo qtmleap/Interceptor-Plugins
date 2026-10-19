@@ -16,7 +16,7 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 from repository_config import BASELINE_URLS, ToolError, load_json, parse_args, run_main
 
-PAGES = ("index", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
+PAGES = ("index", "what-is-interceptor", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
 LOCALES = {"": "ja", "en": "en"}  # directory under website/ -> <html lang>
 INCLUDE_ROOTS = ("src", "types", "manifests", "fixtures")
 FORBIDDEN_SUFFIXES = (".md", ".py", ".sh", ".key", ".pem", ".ts", ".swift", ".lock")

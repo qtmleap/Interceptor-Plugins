@@ -56,7 +56,8 @@ def main():
         run("bun", "run", "check:docs")
         context = json.loads((root / "build/docs-context.json").read_text())
         assert context["fingerprint"] is None and context["base"] == "/my-plugins/"
-        for file in ("index.html", "en/index.html", "authoring.html", "en/authoring.html",
+        for file in ("index.html", "en/index.html", "what-is-interceptor.html", "en/what-is-interceptor.html",
+                     "authoring.html", "en/authoring.html",
                      "api.html", "en/api.html", "examples.html", "en/examples.html",
                      "getting-started.html", "en/getting-started.html"):
             html = (root / "build/docs" / file).read_text()

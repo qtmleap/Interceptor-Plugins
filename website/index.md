@@ -14,8 +14,8 @@ hero:
       text: プラグインを書く
       link: /authoring
     - theme: alt
-      text: アプリで試す
-      link: /getting-started
+      text: Interceptorとは
+      link: /what-is-interceptor
 features:
   - icon:
       src: /icons/filter.svg

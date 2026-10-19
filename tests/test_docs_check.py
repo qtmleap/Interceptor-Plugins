@@ -5,7 +5,7 @@ import sys
 
 from helpers import Case, REPO
 
-PAGES = ("index", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
+PAGES = ("index", "what-is-interceptor", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
 
 
 def html(lang, body="", head=""):
