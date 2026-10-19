@@ -5,9 +5,9 @@ lang: ja
 
 # サンプル
 
-「Request summary」と「Server error filter」は、リポジトリに含まれる実際の既存サンプルです。末尾の将来設計は未実装で、実行できるものとして示していません。
+このリポジトリの「Request summary」と「Server error filter」は、現在の合成テストで実行できるサンプルです。末尾のHTTP Hookの例は将来の設計で、現在は実行できません。
 
-長いコードはコード枠の中を横にスクロールして読めます。コード枠のコピー操作で全文を取得できます。
+長いコードはコード枠内を横にスクロールして確認できます。コピー操作ではコード全文を取得できます。
 
 ## Request summary
 
@@ -30,10 +30,10 @@ lang: ja
 ## 将来のHTTP Hook設計（未実装） {#future-http-hooks}
 
 ::: info 未実装のAPI
-このセクションは**将来の設計**です。`Interceptor.attach` と `rewriteJsonBody` は現在存在せず、現在の合成テストでは動きません。`rewriteJsonBody` は実行環境が提供する想定の組み込み関数で、作者が定義やimportをする必要はありません。
+このセクションは**将来の設計**です。`Interceptor.attach` と `rewriteJsonBody` は未実装のため、現在の合成テストでは動きません。`rewriteJsonBody` は実行環境に組み込む想定の関数で、プラグイン作者が定義やimportをする必要はありません。
 :::
 
-1つのプラグインソースに `POST /search` と `GET /status` の二つの `attach` を含める設計例です。それぞれの `Interceptor.attach` を同じソースのトップレベルに並べます。プラグイン全体で `id` / `version` は1組です。詳細は[HTTP Hook設計](api.md#http-hooks)を参照してください。
+1つのプラグインに、`POST /search` と `GET /status` に対する処理をまとめた設計例です。二つの `Interceptor.attach` を同じソースのトップレベルに並べて記述します。`id` / `version` はプラグイン全体で1組です。詳細は[HTTP Hook設計](api.md#http-hooks)を参照してください。
 
 ```javascript
 Interceptor.attach({
