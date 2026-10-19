@@ -41,3 +41,9 @@ Share the public fingerprint through an independently trusted channel too. A val
 ## For maintainers
 
 For key handling, recovery and post-deployment verification, see the [maintenance and publishing guide (docs/maintaining.md)](https://github.com/%%GITHUB_REPOSITORY%%/blob/master/docs/maintaining.md).
+
+## Signing and Xcode
+
+A plugin signature signs data with Ed25519; it is separate from Apple code signing. Signing itself does not inherently require Xcode. However, this template currently implements `bun run setup` and the signed publishing tools in Swift, and setup requires macOS with Xcode 27. Its supported signing and publishing procedure does not run on Bun alone.
+
+Editing TypeScript, type checking, generating packages and building the documentation work without Xcode. Use `bun run check:authoring` for the portable checks, and follow this page for the current signed publishing procedure.

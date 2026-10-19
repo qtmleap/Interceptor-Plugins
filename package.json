@@ -14,7 +14,8 @@
     "docs:dev": "bun run docs:context && bun --bun vitepress dev website",
     "docs:build": "bun run docs:context && bun --bun vitepress build website",
     "docs:preview": "bun --bun vitepress preview website",
-    "check:docs": "bun run docs:build && python3 tools/check_docs.py --root . --site build/docs"
+    "check:docs": "bun run docs:build && python3 tools/check_docs.py --root . --site build/docs",
+    "docs:diagrams": "bun tools/render-hook-diagrams.ts"
   },
   "devDependencies": {
     "typescript": "5.8.3",

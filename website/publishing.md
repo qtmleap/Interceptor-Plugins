@@ -41,3 +41,9 @@ masterのCIが型チェック、変換、実QuickJSの検証、SHA-256の生成�
 ## 保守者向け
 
 鍵の扱い、復旧、公開後の検証などの詳細は、[管理・公開手順（docs/maintaining.md）](https://github.com/%%GITHUB_REPOSITORY%%/blob/master/docs/maintaining.md)を参照してください。
+
+## 署名とXcode
+
+プラグインの署名はEd25519によるデータの署名で、Appleのコード署名とは別です。署名処理そのものにXcodeが必要なわけではありません。ただし、このテンプレートの `bun run setup` と署名付き公開用ツールは現在Swiftで実装されており、セットアップはmacOSとXcode 27を要求します。Bunだけで署名・公開が完結する手順にはなっていません。
+
+TypeScriptの編集、型チェック、パッケージ生成、ドキュメントのビルドは、Xcodeなしでも実行できます。移植可能な範囲の確認には `bun run check:authoring` を使い、現在の署名付き公開にはこのページの手順を使ってください。
