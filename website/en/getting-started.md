@@ -61,6 +61,8 @@ The body preview should show `{"query":"x","limit":5}`. Changing the host to `ot
 
 A synthetic test runs one phase. Selecting a leave phase does not send traffic; supply the data that would be visible after forwarding.
 
+To change the source code, edit `plugins/NAME/hooks/` in your development environment, rebuild with `bun run build:dev` and reimport the generated package.
+
 ## Use on live traffic
 
 After the compatible build is published, follow these steps for a schema 2 script. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
@@ -69,13 +71,13 @@ After the compatible build is published, follow these steps for a schema 2 scrip
 
 1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
 2. Open **Settings → SSL Proxying List** and add the host shown in the script’s target conditions.
-3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Use on live traffic → Approve for Live Traffic…**, then confirm. A revision is the exact package containing all source files and the manifest shown.
+3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Use on live traffic → Approve for Live Traffic…**, then select **OK**. A revision is the exact package containing all source files and the manifest shown.
 4. Return to **Settings**, turn on **Status**, generate matching traffic and open the host's traffic from **Home** to inspect the forwarded JSON.
 
 Approval lets the script read its declared traffic data and, when permitted, change JSON sent to a server or returned to a client.
 
-Adding or revoking approval, or saving or deleting a schema 2 script, ends the current capture connection. Changes apply on the user's next explicit connection. Decryption-host and certificate-trust configuration is still required. Approving a plugin does not add decryption targets.
+Adding or revoking approval, or deleting a schema 2 script, ends the current capture connection. Changes apply on the user's next explicit connection. Decryption-host and certificate-trust configuration is still required. Approving a plugin does not add decryption targets.
 
-Importing or editing does not enable a revision. New or updated content needs fresh approval. Revoke approval or delete the script when no longer needed; revocation also ends an active connection.
+Importing does not enable a revision. New or updated content needs fresh approval. Revoke approval or delete the script when no longer needed; revocation also ends an active connection.
 
 Live JSON hooks have [format and size limits](api.md#execution-and-limits). External webhook delivery and manual execution from Shortcuts are not supported.

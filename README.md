@@ -30,7 +30,7 @@ Choose a package, inspect its source and grants, then import it disabled. Open i
 
 For responses to `GET https://example.com/`, the callbacks check for status 500–599. For those responses, `response.onEnter` adds `maintenance: true` to JSON and `response.onLeave` builds a result. Change status to `200` to leave the body unchanged and return no action.
 
-For live traffic, users must inspect the source and grants and approve the exact revision. Importing or editing alone never activates it. Live actions are neither stored nor delivered. See [setup](website/en/getting-started.md) and the [four-hook diagram](website/en/what-is-interceptor.md).
+For live traffic, users must inspect the source and grants and approve the exact revision. Importing alone never activates it. Live actions are neither stored nor delivered. See [setup](website/en/getting-started.md) and the [four-hook diagram](website/en/what-is-interceptor.md).
 
 ## Development container
 
