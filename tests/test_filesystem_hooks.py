@@ -57,6 +57,19 @@ class FilesystemHooksTests(Case):
                                   ('other.example.com', '/v1/items', 'PUT')})
         self.assertEqual(len(package['sourceFiles']), 3)
 
+    def test_compilation_preserves_authored_catalog_metadata(self):
+        root = self.routed_root()
+        path = root / 'plugins/demo/plugin.json'
+        metadata = json.loads(path.read_text())
+        metadata.update(author=' Example Team ', summary='Changes search JSON.', category=' Requests / リクエスト ')
+        path.write_text(json.dumps(metadata, ensure_ascii=False))
+        self.ok(self.build(root))
+        package = json.loads((self.tmp / 'out/plugins/demo.json').read_text())
+        self.assertEqual(package['manifest']['author'], ' Example Team ')
+        self.assertEqual(package['manifest']['summary'], 'Changes search JSON.')
+        self.assertEqual(package['manifest']['category'], ' Requests / リクエスト ')
+        self.assertEqual(set(package['sourceFiles']), {'hooks/api.example.com/search/POST.js'})
+
     def test_generated_packages_are_deterministic(self):
         root = self.routed_root()
         self.ok(self.build(root, 'one'))

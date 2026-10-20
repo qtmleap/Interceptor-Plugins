@@ -5,7 +5,7 @@ import stat
 from pathlib import Path
 
 from repository_config import (ToolError, _host_ok, load_json, read_regular, require_exact_keys,
-                               validate_manifest, SAMPLE_NAME_RE, MAX_SOURCE_BYTES)
+                               validate_manifest, DISPLAY_METADATA_KEYS, SAMPLE_NAME_RE, MAX_SOURCE_BYTES)
 
 
 def directory(path):
@@ -16,7 +16,7 @@ def directory(path):
 def metadata(path):
     value = load_json(path, str(path))
     required = ('schemaVersion', 'id', 'name', 'version', 'read', 'write', 'endpointBindings', 'settings')
-    optional = tuple(key for key in ('author', 'summary') if key in value)
+    optional = tuple(key for key in DISPLAY_METADATA_KEYS if key in value)
     require_exact_keys(value, required + optional, str(path))
     if value['schemaVersion'] != 2:
         raise ToolError(f'{path}: authored route plugins require schemaVersion 2')

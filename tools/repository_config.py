@@ -188,6 +188,21 @@ def is_display_name(text, limit=80):
     return not any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Cs") for c in text)
 
 
+DISPLAY_METADATA_LIMITS = (("author", 80, 256), ("summary", 280, 1024), ("category", 80, 256))
+DISPLAY_METADATA_KEYS = tuple(key for key, _, _ in DISPLAY_METADATA_LIMITS)
+
+
+def validate_display_metadata(value, what):
+    """Optional single-line publisher text; Python length counts Unicode scalars after surrogate rejection."""
+    for key, max_chars, max_bytes in DISPLAY_METADATA_LIMITS:
+        if key in value:
+            text = value[key]
+            if not isinstance(text, str) or not text.strip() or len(text) > max_chars \
+                    or len(text.encode("utf-8", "replace")) > max_bytes \
+                    or any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Cs") for c in text):
+                _fail(what, f"invalid {key}")
+
+
 def check_uuid(value, what):
     if not isinstance(value, str) or not UUID_RE.fullmatch(value):
         raise ToolError(f"{what}: not a UUID")
@@ -437,18 +452,12 @@ def validate_manifest(m, what):
             _fail(what, "unsupported schemaVersion")
     common = ("schemaVersion", "id", "name", "version")
     tail = ("read", "endpointBindings", "settings")
-    optional = tuple(key for key in ("author", "summary") if isinstance(m, dict) and key in m)
+    optional = tuple(key for key in DISPLAY_METADATA_KEYS if isinstance(m, dict) and key in m)
     if version == 2:
         require_exact_keys(m, common + ("matches", "read", "write", "endpointBindings", "settings") + optional, what)
     else:
         require_exact_keys(m, common + ("subscriptions",) + tail + optional, what)
-    for key, max_chars, max_bytes in (("author", 80, 256), ("summary", 280, 1024)):
-        if key in m:
-            text = m[key]
-            if not isinstance(text, str) or not text.strip() or len(text) > max_chars \
-                    or len(text.encode("utf-8", "replace")) > max_bytes \
-                    or any(unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp", "Cs") for c in text):
-                _fail(what, f"invalid {key}")
+    validate_display_metadata(m, what)
     check_uuid(m["id"], f"{what} id")
     if not is_display_name(m["name"]):
         _fail(what, "invalid name")

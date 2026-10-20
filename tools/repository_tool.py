@@ -34,7 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_previous  # noqa: E402
 from repository_config import (ToolError, UsageError, UUID_RE, _SEMVER, _list_dir, canonical_url,  # noqa: E402
                                check_uuid, is_display_name, is_int, load_config, load_json, parse_args,
-                               read_regular, require_exact_keys, run_main, validate_manifest)
+                               read_regular, require_exact_keys, run_main, validate_manifest,
+                               DISPLAY_METADATA_KEYS, validate_display_metadata)
 
 HERE = Path(__file__).resolve().parent
 SIGNING = HERE / "signing.mjs"
@@ -378,7 +379,9 @@ def validate_package(data, entry=None, what="package"):
     if len(canonical(manifest["settings"])) > 8192:
         raise ToolError(f"{what}: settings exceed 8192 bytes")
     if entry is not None and (manifest["id"].upper() != entry["id"] or manifest["name"] != entry["name"]
-                              or manifest["version"] != entry["version"]):
+                              or manifest["version"] != entry["version"]
+                              or any(key in entry and (key not in manifest or entry[key] != manifest[key])
+                                     for key in DISPLAY_METADATA_KEYS)):
         raise ToolError(f"{what}: metadata does not match the feed")
     return package
 
@@ -410,7 +413,9 @@ def parse_index(value):
         raise ToolError("index: too many plugins")
     entries, seen = [], set()
     for item in plugins:
-        require_exact_keys(item, ("id", "name", "version", "packagePath", "sha256", "size"), "index plugin")
+        optional = tuple(key for key in DISPLAY_METADATA_KEYS if isinstance(item, dict) and key in item)
+        require_exact_keys(item, ("id", "name", "version", "packagePath", "sha256", "size") + optional, "index plugin")
+        validate_display_metadata(item, "index plugin")
         identifier = _field_uuid(item["id"], "index plugin id")
         size = item["size"]
         version = item["version"]
@@ -421,7 +426,8 @@ def parse_index(value):
             raise ToolError("index: invalid plugin entry")
         seen.add(identifier)
         entries.append({"id": identifier, "name": item["name"], "version": version,
-                        "packagePath": item["packagePath"], "sha256": item["sha256"], "size": size})
+                        "packagePath": item["packagePath"], "sha256": item["sha256"], "size": size,
+                        **{key: item[key] for key in optional}})
     return {"id": _field_uuid(value["id"], "index id"), "name": value["name"], "sequence": sequence,
             "issuedAt": issued, "expiresAt": expires, "plugins": entries}
 
@@ -563,7 +569,7 @@ def publish(directory, repository_id, name, sequence, key_path, now=None):
         packages[f"plugins/{file}"] = data
         entries.append({"id": identifier, "name": manifest["name"], "version": manifest["version"],
                         "packagePath": f"plugins/{file}", "sha256": hashlib.sha256(data).hexdigest(),
-                        "size": len(data)})
+                        "size": len(data), **{key: manifest[key] for key in DISPLAY_METADATA_KEYS if key in manifest}})
     issued = int(time.time() if now is None else now)
     data = build_envelope(entries, repository_id, name, sequence, issued, seed)
     snapshot = verify_envelope(data, issued)
