@@ -21,7 +21,7 @@ from pathlib import Path
 from repository_config import (OFFICIAL_REPOSITORY, ToolError, check_fingerprint, check_repository,
                                dump_json, load_config, load_manifests, load_reserved, new_uuid,
                                parse_json_object, read_regular, run_main, same_repository, validate_config,
-                               validate_manifest, require_exact_keys, DISPLAY_METADATA_KEYS)
+                               validate_manifest, require_exact_keys, DISPLAY_METADATA_KEYS, PUBLISHED_AT_KEY)
 
 ENVIRONMENT = 'github-pages'
 SECRET = 'INTERCEPTOR_REPOSITORY_KEY_B64'
@@ -282,7 +282,7 @@ def check_files(root, state, *, apply=False):
             validate_config(value)
         elif is_authored:
             required = ('schemaVersion', 'id', 'name', 'version', 'read', 'write', 'endpointBindings', 'settings')
-            optional = tuple(key for key in DISPLAY_METADATA_KEYS if isinstance(value, dict) and key in value)
+            optional = tuple(key for key in (*DISPLAY_METADATA_KEYS, PUBLISHED_AT_KEY) if isinstance(value, dict) and key in value)
             require_exact_keys(value, required + optional, name)
             if value['schemaVersion'] != 2:
                 raise ToolError('authored plugin checkpoint requires schemaVersion 2')

@@ -21,6 +21,8 @@ LinuxとmacOSで同じコマンドを使えます。Bun %%BUN_VERSION%%、Python
 
 1つのプラグインを`plugins/NAME/`にまとめます。`plugin.json`に名前・バージョン・読み書きの権限を、`hooks/`以下に処理を書きます。対象条件やファイルの一覧は`plugin.json`に書きません。
 
+`publishedAt`には発行元が指定した発行日時をUTCの`yyyy-MM-ddTHH:mm:ssZ`形式で記載できます。ビルドでは指定した値がそのまま保持され、日時を自動で補うことはありません。省略した場合、発行日は表示されません。
+
 ```text
 plugins/request-summary/
 ├── plugin.json

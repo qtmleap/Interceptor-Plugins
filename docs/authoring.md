@@ -13,7 +13,7 @@ plugins/request-summary/
             └── POST.ts
 ```
 
-`plugin.json` declares metadata, explicit `read` and body `write` grants, `endpointBindings` and `settings`. Keep the plugin UUID stable after setup and increment its version when published content changes. Do not write `matches`, `hooks` or `sourceFiles` in this file.
+`plugin.json` declares metadata, explicit `read` and body `write` grants, `endpointBindings` and `settings`. Keep the plugin UUID stable after setup and increment its version when published content changes. Do not write `matches`, `hooks` or `sourceFiles` in this file. Optionally set `publishedAt` to the date you declare for the release, in UTC as `yyyy-MM-ddTHH:mm:ssZ` (for example `2026-10-21T09:30:00Z`). You write it yourself; the build copies it unchanged and never generates it. Omit it if you do not want to show a date.
 
 The location `hooks/HOST/PATH/METHOD.ts` selects an exact host, path and method. For `/`, use `hooks/HOST/METHOD.ts`. Host names are lowercase; methods are uppercase. Paths are case-sensitive. Add another file to handle another API, with up to 16 route files per plugin.
 

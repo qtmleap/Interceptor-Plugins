@@ -35,7 +35,7 @@ import fetch_previous  # noqa: E402
 from repository_config import (ToolError, UsageError, UUID_RE, _SEMVER, _list_dir, canonical_url,  # noqa: E402
                                check_uuid, is_display_name, is_int, load_config, load_json, parse_args,
                                read_regular, require_exact_keys, run_main, validate_manifest,
-                               DISPLAY_METADATA_KEYS, validate_display_metadata)
+                               DISPLAY_METADATA_KEYS, validate_display_metadata, parse_time, _epoch, _TIME_RE)  # noqa: F401
 
 HERE = Path(__file__).resolve().parent
 SIGNING = HERE / "signing.mjs"
@@ -54,7 +54,6 @@ PUBLISH_LIFETIME = 30 * 86_400
 MIN_LIVE_REMAINING = 14 * 86_400
 FETCH_DEADLINE = 15
 RUN_TIMEOUT = 20
-_TIME_RE = re.compile(r"^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})Z$")
 _SEGMENT_RE = re.compile(r"^[0-9A-Za-z._-]{1,128}$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 _PUBLIC_DIRECTORIES = ("public", "www", "htdocs", "_site")
@@ -188,31 +187,6 @@ def strict_base64(text):
     if base64.b64encode(data).decode() != text:
         raise ToolError("invalid base64")
     return data
-
-
-def parse_time(text):
-    """Second-resolution UTC RFC 3339 (yyyy-MM-ddTHH:mm:ssZ) to epoch seconds, or None."""
-    match = _TIME_RE.fullmatch(text) if isinstance(text, str) else None
-    if not match:
-        return None
-    year, month, day, hour, minute, second = map(int, match.groups())
-    if year < 1 or not 1 <= month <= 12 or hour > 23 or minute > 59 or second > 59:
-        return None
-    leap = year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-    days = [31, 29 if leap else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1]
-    if not 1 <= day <= days:
-        return None
-    return int(_epoch(year, month, day)) + hour * 3600 + minute * 60 + second
-
-
-def _epoch(year, month, day):
-    # Days from civil (proleptic Gregorian), matching the app's DateCodec.
-    y = year - 1 if month <= 2 else year
-    era = (y if y >= 0 else y - 399) // 400
-    yoe = y - era * 400
-    doy = (153 * (month + (-3 if month > 2 else 9)) + 2) // 5 + day - 1
-    doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
-    return (era * 146_097 + doe - 719_468) * 86_400
 
 
 def format_time(seconds):

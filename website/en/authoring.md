@@ -21,6 +21,8 @@ Linux and macOS use the same commands. Install Bun %%BUN_VERSION%%, Python 3, Op
 
 Keep each plugin in `plugins/NAME/`. Declare its name, version and read/write permissions in `plugin.json`, and write its processing under `hooks/`. Do not list target conditions or source files in `plugin.json`.
 
+Optionally set `publishedAt` to the publisher-declared release date in UTC as `yyyy-MM-ddTHH:mm:ssZ`. The build preserves this value and never generates a date. When omitted, no publication date is displayed.
+
 ```text
 plugins/request-summary/
 ├── plugin.json
