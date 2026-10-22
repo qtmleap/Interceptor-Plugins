@@ -115,7 +115,7 @@ fn execute(args: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     if args.is_empty() || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h")) {
-        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest. No webhooks are sent.");
+        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
         return Ok(0);
     }
     match (args[0].as_str(), args.len()) {

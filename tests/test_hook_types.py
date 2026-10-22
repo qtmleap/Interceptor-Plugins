@@ -60,6 +60,37 @@ Interceptor.attach({
                                      '--noEmit', '--target', 'ES2020', str(path)], capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_send_accepts_only_binding_and_string_headers(self):
+        source = '''
+Interceptor.send('lookup', {headers: {authorization: 'Bearer x'}});
+const result: void = Interceptor.send('lookup', {headers: {}});
+void result;
+// @ts-expect-error options are required
+Interceptor.send('lookup');
+// @ts-expect-error the headers map is required even when empty
+Interceptor.send('lookup', {});
+// @ts-expect-error URLs come from the manifest
+Interceptor.send('lookup', {headers: {}, url: 'https://example.com/'});
+// @ts-expect-error the method is declared in the manifest
+Interceptor.send('lookup', {headers: {}, method: 'POST'});
+// @ts-expect-error bodies are not supported
+Interceptor.send('lookup', {headers: {}, body: {}});
+// @ts-expect-error header values are plain strings
+Interceptor.send('lookup', {headers: {a: 1}});
+// @ts-expect-error send has no Promise result
+Interceptor.send('lookup', {headers: {}}).then(() => {});
+// @ts-expect-error the binding is required
+Interceptor.send();
+const options: Interceptor.SendOptions = {headers: {accept: 'application/json'}};
+void options;
+'''
+        with tempfile.TemporaryDirectory(prefix='send-types-') as temporary:
+            path = Path(temporary) / 'send.ts'
+            path.write_text(f'/// <reference path="{ROOT / "types/interceptor.d.ts"}" />\n' + source)
+            result = subprocess.run(['bun', str(ROOT / 'node_modules/typescript/bin/tsc'), '--strict',
+                                     '--noEmit', '--target', 'ES2020', str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

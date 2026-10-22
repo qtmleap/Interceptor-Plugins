@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 2,
+  "id": "3F0C9B64-5E0D-4B7A-9C1E-6A7D2B8E4F10",
+  "name": "Outbound example",
+  "version": "2.0.0",
+  "read": {
+    "metadata": ["host", "path", "status"],
+    "headers": ["set-cookie"],
+    "queryKeys": [],
+    "body": {
+      "mode": "json"
+    }
+  },
+  "write": {
+    "requestBody": false,
+    "responseBody": false
+  },
+  "endpointBindings": [],
+  "settings": {},
+  "outbound": {
+    "bearer": {
+      "url": "https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/bearer",
+      "method": "GET",
+      "headers": ["authorization"]
+    },
+    "cookie": {
+      "url": "https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/cookie",
+      "method": "GET",
+      "headers": ["cookie"]
+    }
+  }
+}

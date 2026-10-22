@@ -22,16 +22,27 @@ const regular = file => {
 const isAttach = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
   && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
   && node.expression.name.text === 'attach';
+const isSend = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
+  && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
+  && node.expression.name.text === 'send';
 
 function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
+  const sends = [];
   const references = [];
   const walk = (node, parent) => {
     if (isAttach(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) calls.push(node);
+    if (isSend(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) sends.push(node);
+    if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
+        && ts.isIdentifier(node.expression) && node.expression.text === 'Interceptor'
+        && (ts.isElementAccessExpression(node) || ['attach', 'send'].includes(node.name.text))
+        && checker.getSymbolAtLocation(node.expression) !== namespace) {
+      throw new Error(`${source.fileName}: Interceptor host calls cannot use a shadowed name`);
+    }
     if ((ts.isIdentifier(node) || ts.isStringLiteral(node)) && !ts.isQualifiedName(parent) && !ts.isTypeQueryNode(parent)) {
       const symbol = ts.isShorthandPropertyAssignment(parent) && parent.name === node
         ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
-      if (globalObject && symbol === globalObject) throw new Error(`${source.fileName}: access the host only through the direct Interceptor.attach call`);
+      if (globalObject && symbol === globalObject) throw new Error(`${source.fileName}: access the host only through direct Interceptor.attach or callback Interceptor.send calls`);
       if (symbol === namespace) references.push(node);
     }
     ts.forEachChild(node, child => walk(child, node));
@@ -41,8 +52,9 @@ function staticHooks(source, checker, namespace, globalObject) {
     throw new Error(`${source.fileName}: use one direct top-level Interceptor.attach({ ... })`);
   }
   const call = calls[0];
-  if (references.some(node => node !== call.expression.expression)) {
-    throw new Error(`${source.fileName}: Interceptor.attach cannot be aliased or called indirectly`);
+  const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression)]);
+  if (references.some(node => !directReferences.has(node))) {
+    throw new Error(`${source.fileName}: Interceptor host calls cannot be aliased or called indirectly`);
   }
   if (call.arguments.length !== 1 || !ts.isObjectLiteralExpression(call.arguments[0])) {
     throw new Error(`${source.fileName}: attach takes one hooks object; conditions come from the file path`);
@@ -61,16 +73,42 @@ function staticHooks(source, checker, namespace, globalObject) {
     });
   }
   const hooks = {};
+  const callbackBodies = [];
   for (const [leg, property] of entries(call.arguments[0], ['request', 'response'])) {
     if (!ts.isPropertyAssignment(property) || !ts.isObjectLiteralExpression(property.initializer)) {
       throw new Error(`${source.fileName}: ${leg} must be a static hooks object`);
     }
     hooks[leg] = {};
-    for (const [phase] of entries(property.initializer, ['onEnter', 'onLeave'])) hooks[leg][phase] = true;
+    for (const [phase, callback] of entries(property.initializer, ['onEnter', 'onLeave'])) {
+      hooks[leg][phase] = true;
+      const fn = ts.isMethodDeclaration(callback) ? callback : callback.initializer;
+      if (fn && (ts.isMethodDeclaration(fn) || ts.isFunctionExpression(fn) || ts.isArrowFunction(fn)) && fn.body) {
+        callbackBodies.push(fn.body);
+      }
+    }
     if (!Object.keys(hooks[leg]).length) throw new Error(`${source.fileName}: empty ${leg} hooks`);
   }
   if (!Object.keys(hooks).length) throw new Error(`${source.fileName}: declare at least one hook`);
+  for (const send of sends) {
+    if (!callbackBodies.some(body => send.pos >= body.pos && send.end <= body.end)) {
+      throw new Error(`${source.fileName}: Interceptor.send is available only inside a registered callback`);
+    }
+  }
   return hooks;
+}
+
+function legacyHostValues(source, checker, namespace) {
+  const walk = (node, parent) => {
+    if ((ts.isIdentifier(node) || ts.isStringLiteral(node)) && !ts.isQualifiedName(parent) && !ts.isTypeQueryNode(parent)) {
+      const symbol = ts.isShorthandPropertyAssignment(parent) && parent.name === node
+        ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
+      if (symbol === namespace) {
+        throw new Error(`${source.fileName}: Interceptor host calls require schema 2 plugins/NAME/hooks; legacy scripts may use the namespace only for types`);
+      }
+    }
+    ts.forEachChild(node, child => walk(child, node));
+  };
+  walk(source, source);
 }
 
 function compile(file, sdk, legacyHooks = [], routed = false) {
@@ -111,6 +149,7 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
   const checker = program.getTypeChecker();
   const namespace = program.getSourceFile(sdk).statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
   const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
+  if (!routed) legacyHostValues(source, checker, checker.getSymbolAtLocation(namespace.name));
   const hooks = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {

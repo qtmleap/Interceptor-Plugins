@@ -488,11 +488,14 @@ def validate_manifest(m, what):
     tail = ("read", "endpointBindings", "settings")
     optional = tuple(key for key in DISPLAY_METADATA_KEYS + (PUBLISHED_AT_KEY,) if isinstance(m, dict) and key in m)
     if version == 2:
+        optional += tuple(key for key in ("outbound",) if isinstance(m, dict) and key in m)
         require_exact_keys(m, common + ("matches", "read", "write", "endpointBindings", "settings") + optional, what)
     else:
         require_exact_keys(m, common + ("subscriptions",) + tail + optional, what)
     validate_display_metadata(m, what)
     validate_published_at(m, what)
+    if "outbound" in m:
+        validate_outbound(m["outbound"], what + " outbound")
     check_uuid(m["id"], f"{what} id")
     if not is_display_name(m["name"]):
         _fail(what, "invalid name")
@@ -528,6 +531,73 @@ def validate_manifest(m, what):
     _json_shape(m["settings"], 16)
     if version == 2 and len(json.dumps(m, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')) > 32768:
         _fail(what, 'manifest exceeds 32 KiB')
+
+
+_OUTBOUND_BINDING = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}")
+_OUTBOUND_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
+_OUTBOUND_HEADER = re.compile(r"[0-9a-z!#$%&'*+.^_`|~-]{1,128}")
+_OUTBOUND_DENIED_HEADERS = frozenset(("host", "content-length", "transfer-encoding", "connection", "upgrade", "te",
+                                      "trailer", "expect", "keep-alive", "set-cookie"))
+
+
+# RFC 3986 pchar (unreserved / sub-delims / ":" / "@") plus "/"; "%" is handled separately.
+_OUTBOUND_PATH_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~!$&'()*+,;=:@/")
+
+
+def validate_outbound_url(url, what):
+    """Canonical-only HTTPS URL: lowercase DNS host, default port, no userinfo/query/fragment, strict escapes."""
+    if not isinstance(url, str) or not url.isascii() or len(url) > 2048:
+        _fail(what, "invalid url")
+    if not url.startswith("https://"):
+        _fail(what, "url must use lowercase https://")
+    rest = url[8:]
+    slash = rest.find("/")
+    if slash < 0:
+        _fail(what, "url requires a path")
+    host, path = rest[:slash], rest[slash:]
+    labels = host.split(".")
+    if (len(host) > 253 or len(labels) < 2 or labels[-1] in ("local", "localhost")
+            or not all(_OUTBOUND_LABEL.fullmatch(label) for label in labels)
+            or not any("a" <= c <= "z" for c in labels[-1])):
+        _fail(what, "url host must be a canonical lowercase DNS name")
+    if len(path) > 1024:
+        _fail(what, "url path too long")
+    index = 0
+    while index < len(path):
+        c = path[index]
+        if c == "%":
+            escape = path[index + 1:index + 3]
+            if not re.fullmatch(r"[0-9A-Fa-f]{2}", escape):
+                _fail(what, "url has an invalid percent escape")
+            octet = int(escape, 16)
+            if octet < 0x20 or octet == 0x7F or octet == 0x5C:
+                _fail(what, "url has a forbidden encoded control or backslash")
+            index += 3
+        elif c in _OUTBOUND_PATH_CHARS:
+            index += 1
+        else:
+            _fail(what, "url path has an invalid character")
+
+
+def validate_outbound(outbound, what):
+    """Optional schema 2 outbound request declarations: at most four named GET requests."""
+    if not isinstance(outbound, dict) or len(outbound) > 4:
+        _fail(what, "expected at most 4 declarations")
+    for name, declaration in outbound.items():
+        label = f"{what} {name}"
+        if not _OUTBOUND_BINDING.fullmatch(name):
+            _fail(what, "invalid binding name")
+        require_exact_keys(declaration, ("url", "method", "headers"), label)
+        validate_outbound_url(declaration["url"], label)
+        if declaration["method"] != "GET":
+            _fail(label, "method must be GET")
+        headers = _strings(declaration["headers"], label + " headers", 0, 8)
+        if len(set(headers)) != len(headers):
+            _fail(label, "duplicate header")
+        for header in headers:
+            if (not _OUTBOUND_HEADER.fullmatch(header) or header in _OUTBOUND_DENIED_HEADERS
+                    or header.startswith("proxy-")):
+                _fail(label, "header not allowed")
 
 
 def _list_dir(directory, suffix, kind):

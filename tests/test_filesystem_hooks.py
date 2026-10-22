@@ -114,6 +114,45 @@ class FilesystemHooksTests(Case):
             root = self.routed_root(); self.route(root, source=direct + extra)
             self.fails(self.build(root, 'indirect-' + str(index)))
 
+    def test_direct_send_is_allowed_in_all_four_callbacks_for_non_get_routes(self):
+        root = self.routed_root()
+        self.route(root, source="""Interceptor.attach({
+          request: {
+            onEnter(req) { Interceptor.send('lookup', {headers: {}}); },
+            onLeave: (req) => { Interceptor.send('lookup', {headers: {accept: 'application/json'}}); }
+          },
+          response: {
+            onEnter: function(res) { Interceptor.send('lookup', {headers: {}}); },
+            onLeave(res) { Interceptor.send('lookup', {headers: {}}); }
+          }
+        });""")
+        self.ok(self.build(root))
+        package = json.loads((self.tmp / 'out/plugins/demo.json').read_text())
+        self.assertEqual(package['manifest']['matches'][0]['methods'], ['POST'])
+        self.assertEqual(set(package['manifest']['matches'][0]['hooks']['request']), {'onEnter', 'onLeave'})
+        self.assertEqual(set(package['manifest']['matches'][0]['hooks']['response']), {'onEnter', 'onLeave'})
+
+    def test_send_cannot_escape_direct_registered_callbacks(self):
+        indirect = (
+            "const send = Interceptor.send; send('lookup', {headers: {}});",
+            "const host = Interceptor; host.send('lookup', {headers: {}});",
+            "Interceptor['send']('lookup', {headers: {}});",
+            "Interceptor.send.call(null, 'lookup', {headers: {}});",
+            "globalThis.Interceptor.send('lookup', {headers: {}});",
+            "const Interceptor = req.body; Interceptor.send('lookup', {headers: {}});",
+            "const Interceptor = req.body; Interceptor['send']('lookup', {headers: {}});",
+        )
+        registration = (
+            "Interceptor.send('lookup', {headers: {}}); Interceptor.attach({request:{onEnter(req){}}});",
+            "Interceptor.attach({request:{onEnter: (() => { Interceptor.send('lookup', {headers: {}}); return (req: Interceptor.RequestLeg) => {}; })()}});",
+            "const callback = (req: Interceptor.RequestLeg) => { Interceptor.send('lookup', {headers: {}}); }; Interceptor.attach({request:{onEnter: callback}});",
+        )
+        sources = ["Interceptor.attach({request:{onEnter(req){" + code + "}}});" for code in indirect]
+        for index, source in enumerate(sources + list(registration)):
+            with self.subTest(source=source):
+                root = self.routed_root(); self.route(root, source=source)
+                self.fails(self.build(root, 'indirect-send-' + str(index)))
+
     def test_target_arguments_are_rejected(self):
         for index, source in enumerate(("Interceptor.attach('search',{request:{onEnter(req){}}});",
                                         "Interceptor.attach({hosts:['api.example.com']},{request:{onEnter(req){}}});")):

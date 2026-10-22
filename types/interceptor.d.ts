@@ -71,6 +71,15 @@ declare namespace Interceptor {
       onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome;
     };
   }
+  /** Options for `send`. Supply a string header map, including an empty map when no headers are needed. */
+  interface SendOptions {
+    readonly headers: { readonly [name: string]: string };
+  }
+  /**
+   * Records an HTTP request intent for a binding declared in the manifest `outbound` metadata.
+   * Synchronous and non-blocking: it returns no value, Promise or Response, and the hook never sees the result.
+   */
+  function send(binding: string, options: SendOptions): void;
   /** Registers this file's handlers. The build derives targets from its path. */
   function attach(hooks: Hooks): void;
 }

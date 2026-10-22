@@ -82,6 +82,23 @@ class TypeScriptTests(Case):
                 self.fails(result)
                 self.assertFalse(out.exists())
 
+    def test_schema_one_rejects_host_send_and_preserves_namespace_types(self):
+        root = self.authored_root()
+        result, _ = self.build(root, 'legacy-types')
+        self.ok(result)
+        original = (root / 'src/request-summary.ts').read_text()
+        for index, call in enumerate((
+            "Interceptor.send('lookup', {headers: {}});",
+            "Interceptor['send']('lookup', {headers: {}});",
+            "const send = Interceptor.send; send('lookup', {headers: {}});",
+            "const host = Interceptor; host.send('lookup', {headers: {}});",
+        )):
+            with self.subTest(call=call):
+                (root / 'src/request-summary.ts').write_text(original.replace('return { actions:', call + '\nreturn { actions:'))
+                result, out = self.build(root, 'legacy-send-' + str(index))
+                self.fails(result)
+                self.assertFalse(out.exists())
+
     def test_cannot_link_unemitted_sources_or_inject_host_library_types(self):
         for index, directive in enumerate(('/// <reference path="../shared.ts" />',
                                            '/// <reference lib="dom" />')):

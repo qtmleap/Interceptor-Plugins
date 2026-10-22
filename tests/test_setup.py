@@ -416,3 +416,18 @@ class RoutedSetupTests(Case):
         with self.assertRaisesRegex(ToolError, 'symlink'):
             setup_tool.check_files(root, {'files': files, 'originals': originals}, apply=True)
         self.assertEqual((external / 'plugin.json').read_bytes(), before)
+
+    def test_routed_checkpoint_preserves_outbound_and_validates_it(self):
+        root, state, api, keys, plugin = self.routed_fixture()
+        metadata = json.loads((plugin / 'plugin.json').read_text())
+        metadata['outbound'] = {'lookup': {'url': 'https://api.example.com/v1', 'method': 'GET', 'headers': ['accept']}}
+        (plugin / 'plugin.json').write_text(json.dumps(metadata))
+        self.setup(root, state, api, keys)
+        checkpoint = json.loads((state / 'setup-state.json').read_text())
+        self.assertEqual(checkpoint['files']['plugins/route-example/plugin.json']['outbound'], metadata['outbound'])
+        files, originals = copy.deepcopy(checkpoint['files']), checkpoint['originals']
+        files['plugins/route-example/plugin.json']['outbound']['lookup']['url'] = 'http://api.example.com/'
+        before = tree_digest(root)
+        with self.assertRaises(ToolError):
+            setup_tool.check_files(root, {'files': files, 'originals': originals}, apply=True)
+        self.assertEqual(tree_digest(root), before)

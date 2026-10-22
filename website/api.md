@@ -15,7 +15,7 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 `Interceptor.attach(hooks)`で、このファイルの処理を登録します。ビルドはファイルの配置場所からホスト・パス・メソッドを読み取り、`request`・`response`内のHook定義とともにmanifestへ書き出します。`attach`には対象条件やプラグインIDは渡しません。
 
-`actions`は、Hookが返すアクションの配列です。`type: 'webhook'`は通知先の識別子`endpointId`とJSONデータを含む形式名です。`endpointId`には送信先URLではなく、`cfg.endpoints`から取得するIDを使います。合成テストではアクションの内容を結果欄で確認でき、HTTP送信は行いません。現在の実通信では返したアクションを保存・送信しません。
+`actions`はHookが返す従来のWebhook形式のアクションの配列です。`type: 'webhook'`は通知先の識別子`endpointId`とJSONデータを含む形式名です。`endpointId`には送信先URLではなく、`cfg.endpoints`から取得するIDを使います。合成テストではアクションの内容を結果欄で確認でき、HTTP送信は行いません。実通信ではこのWebhook形式の戻り値を保存・送信しません。別APIへのGET送信には[Interceptor.send](#interceptor-send)を使います。
 
 次のコードを`hooks/api.example.com/search/POST.ts`に置くと、`POST https://api.example.com/search`の処理になります。Interceptorは生成されたmanifestで通信条件とHookを判定し、対応するJSファイルをロードして実行します。
 
@@ -103,7 +103,7 @@ Interceptor.attach({
 });
 ```
 
-このHookで本文を変更しようとするとエラーになります。合成テストでは、渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では返したアクションを保存・送信しません。
+このHookで本文を変更しようとするとエラーになります。合成テストでは渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では戻り値のWebhook形式のアクションを保存・送信しません。
 
 ## response.onEnter {#response-onenter}
 
@@ -142,7 +142,43 @@ Interceptor.attach({
 });
 ```
 
-このHookで本文を変更しようとするとエラーになります。合成テストでは、渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では返したアクションを保存・送信しません。
+このHookで本文を変更しようとするとエラーになります。合成テストでは渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では戻り値のWebhook形式のアクションを保存・送信しません。
+
+## Interceptor.send {#interceptor-send}
+
+`Interceptor.send(binding, { headers })`は、manifestの`outbound`に宣言した別のAPIへGETリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
+
+```ts
+Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
+```
+
+第2引数と、その中の`headers`は必須です。ヘッダーが不要なら`{ headers: {} }`を渡します。`SendOptions`に指定できるのは、文字列の値を持つ`headers`だけです。ヘッダー名は宣言の`headers`に含めます。URLと`GET`メソッドは宣言で固定し、本文は送れません。`url`、`method`、`body`、文字列以外のヘッダー値はエラーになります。
+
+既存の4つのHookで、対象の通信がJSON本文などの実行条件を満たしている場合に呼べます。元の通信のメソッドを`GET`に限定するものではありません。ファイルのトップレベルでは`attach`を1回呼び、登録した`onEnter`または`onLeave`の関数内で`send`を直接呼びます。`send`を別の変数に代入して呼ぶ書き方や、`Interceptor['send']`は使えません。`attach`でHookを登録している間も`send`は呼べません。
+
+### outboundの宣言 {#outbound-metadata}
+
+`plugin.json`に、名前付きのリクエストを最大4件宣言します。各項目は`url`、`method`（`"GET"`）、`headers`（小文字の名前を最大8件）だけです。
+
+```json
+"outbound": {
+  "bearer": {
+    "url": "https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/bearer",
+    "method": "GET",
+    "headers": ["authorization"]
+  }
+}
+```
+
+- URLは小文字の`https://`で始まる2048バイト以下のASCII文字列にします。小文字のDNSホストと`/`から始まるパスが必要です。ポート番号は`:443`も含めて省略し、userinfo・クエリ・フラグメントは指定しません。ホストには2つ以上のラベルが必要で、末尾のラベルに英字を含めます。IPアドレス、単一ラベルのホスト、`.local`・`.localhost`で終わるホストは使えません。
+- パスは1024バイト以下です。そのまま書けるのは英数字、`-._~`、`!$&'()*+,;=`、`:`、`@`、`/`だけで、それ以外はパーセントエンコードします。エンコードされたUTF-8バイトは使えますが、制御文字・DEL・バックスラッシュにデコードされるエスケープは使えません。
+- 送信先は宣言したURLに固定されます。パターン、リダイレクト、URLの置き換えは使えません。`host`などの通信制御ヘッダー、`proxy-*`、`set-cookie`は宣言できません。
+- manifestはビルドが生成します。`plugin.json`が編集元で、`outbound`はそのままmanifestへ書き出されます。生成されたmanifestは手で編集しないでください。
+- `outbound`を追加・変更すると、利用者が承認する送信先が変わります。固定された送信先が承認画面に表示され、更新時は再承認が必要です。
+- 1回のHook実行で記録できるアクションは、従来のアクションと合わせて2件までです。同じ通信の同じHookタイミング（例えば`response.onLeave`）で行うGET送信は、全プラグインを合わせて2件までです。合計が2件を超えた場合や、送信前のいずれかの検証に失敗した場合は、そのタイミングに登録した送信要求をすべて破棄します。不明な送信先や許可されていないヘッダーによる検証エラーは、例外を捕捉しても取り消せません。実際のHTTP送信で起きる通信エラーは送信前の検証エラーとは別で、元の通信には影響しません。
+- `Set-Cookie`から最初のCookieのペア（`name=value`）を取り出して`cookie`に渡し、`Path`などの属性は含めません。Cookieの自動送信や保存はしません。合成テストとRustシミュレータは記録したアクションを表示するだけで、HTTP送信は行いません。
+
+トークンとCookieの流れは[サンプル](examples.md#outbound-example)を参照してください。
 
 ## manifestと権限
 

@@ -15,7 +15,7 @@ import HookFlow from '../.vitepress/components/HookFlow.vue'
 
 `Interceptor.attach(hooks)` registers the handlers in this file. The build derives host, path and method from its location and emits the declared request/response hooks into the manifest. Pass no target conditions or plugin ID to `attach`.
 
-`actions` is the array of actions returned by a hook. The `webhook` type describes an intended notification containing an `endpointId` and JSON data. Use an ID from `cfg.endpoints` for `endpointId`, rather than a destination URL. Synthetic tests display the action's contents without sending HTTP requests. Current live processing does not save or deliver returned actions.
+`actions` is the array of legacy Webhook actions returned by a hook. The `webhook` type describes an intended notification containing an `endpointId` and JSON data. Use an ID from `cfg.endpoints` for `endpointId`, rather than a destination URL. Synthetic tests display the action's contents without sending HTTP requests. Live processing does not save or deliver these returned Webhook actions. Use [Interceptor.send](#interceptor-send) to send GET requests to another API.
 
 Place this code in `hooks/api.example.com/search/POST.ts` to handle `POST https://api.example.com/search`. Interceptor uses the generated manifest to select the matching route and hook, then loads and executes the corresponding JavaScript file.
 
@@ -100,7 +100,7 @@ Interceptor.attach({
 });
 ```
 
-Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver returned actions.
+Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver the returned Webhook actions.
 
 ## response.onEnter {#response-onenter}
 
@@ -138,7 +138,43 @@ Interceptor.attach({
 });
 ```
 
-Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver returned actions.
+Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver the returned Webhook actions.
+
+## Interceptor.send {#interceptor-send}
+
+`Interceptor.send(binding, { headers })` requests a GET to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
+
+```ts
+Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
+```
+
+The second argument and its `headers` map are required; pass `{ headers: {} }` when no headers are needed. `SendOptions` accepts only `headers`, a plain object of string values whose names are listed in the declaration. The declaration fixes the URL and `GET` method, and requests have no body. Passing `url`, `method`, `body` or non-string header values is an error.
+
+Use `send` from any of the four existing hooks when the captured traffic meets its normal JSON body and other eligibility rules. The original request method need not be `GET`. Keep one direct top-level `attach` call and call `send` directly inside an `onEnter` or `onLeave` function registered by `attach`. Calling `send` through another variable or as `Interceptor['send']` is rejected. It also cannot run while `attach` registers the hooks.
+
+### Declaring outbound requests {#outbound-metadata}
+
+Declare up to four named requests in `plugin.json`. Each one is exactly `url`, `method` (`"GET"`) and `headers` (up to eight lowercase names):
+
+```json
+"outbound": {
+  "bearer": {
+    "url": "https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/bearer",
+    "method": "GET",
+    "headers": ["authorization"]
+  }
+}
+```
+
+- Use an ASCII URL of at most 2048 bytes beginning with lowercase `https://`. It needs a lowercase DNS host and an explicit path starting with `/`. Omit the port, including `:443`, userinfo, query and fragment. The host needs at least two labels, with an ASCII letter somewhere in the final label. IP addresses, single-label hosts and `.local` or `.localhost` suffixes are rejected.
+- The path is at most 1024 bytes. Only letters, digits, `-._~`, `!$&'()*+,;=`, `:`, `@` and `/` may appear literally; encode other bytes as valid percent escapes. Encoded UTF-8 bytes are allowed; decoded controls, DEL and backslashes are rejected.
+- Interceptor sends only to the declared URL; there are no patterns, redirects or URL substitutions. Framing and hop-by-hop headers such as `host`, `proxy-*` names and `set-cookie` cannot be declared.
+- The manifest is generated. `plugin.json` is the authored source; the build copies `outbound` into the manifest unchanged. Do not edit the generated manifest by hand.
+- Adding or changing `outbound` changes the egress the user must approve. The fixed destinations are shown in the approval, and updated plugins need approval again.
+- Each hook execution can record at most two actions, including legacy actions. For the same captured exchange and hook timing (for example, `response.onLeave`), all plugins together may send at most two GET requests. If the combined count exceeds two, or any validation before sending fails, all requests recorded for that timing are discarded. An invalid binding or undeclared header remains a validation error even if the script catches its exception. Network failures during the actual HTTP request are separate from pre-send validation errors and do not affect the original traffic.
+- Take the first Cookie pair (`name=value`) from `Set-Cookie` and pass it in `cookie`, leaving out attributes such as `Path`. Cookies are never stored or sent automatically. Synthetic tests and the Rust simulator display recorded actions without delivering HTTP requests.
+
+See the [fixture example](examples.md#outbound-example) for a token and cookie flow.
 
 ## Manifest and permissions
 

@@ -34,3 +34,15 @@ In Server error filter, “filter” means processing only 5xx responses; it doe
 <<< ../../plugins/server-error-filter/hooks/example.com/GET.ts{ts}
 
 <<< ../../plugins/server-error-filter/plugin.json{json}
+
+## Outbound example {#outbound-example}
+
+This development example lives under `fixtures/` and is not a published default plugin. It handles a `200` response to `GET https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials`, reading `accessToken` from JSON and the granted `set-cookie` header. `response.onLeave` records a `bearer` send to `/auth/bearer` and a `cookie` send to `/auth/cookie`. Both destinations are fixed in `outbound`.
+
+The public test API returns `accessToken: "interceptor-test-token"` and `fixture_session=dummy-session-not-a-secret`. The example extracts the first Cookie pair and omits `Set-Cookie` attributes such as `Path`. Running it in the simulator records intents without sending secondary requests.
+
+`fixtures/outbound-example/hooks/interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials/GET.ts`
+
+<<< ../../fixtures/outbound-example/hooks/interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials/GET.ts{ts}
+
+<<< ../../fixtures/outbound-example/plugin.json{json}

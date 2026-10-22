@@ -34,3 +34,15 @@ Server error filterの「filter」は、5xxの場合だけ処理するという�
 <<< ../plugins/server-error-filter/hooks/example.com/GET.ts{ts}
 
 <<< ../plugins/server-error-filter/plugin.json{json}
+
+## Outbound example {#outbound-example}
+
+`fixtures/`にある開発用のサンプルです。公開用の標準プラグインには含まれません。`GET https://interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials`の`200`レスポンスから、JSONの`accessToken`と、読み取りを許可した`set-cookie`を取得します。`response.onLeave`から`Interceptor.send`を呼び、`/auth/bearer`へは取得したトークンを認証ヘッダーに付けて、`/auth/cookie`へは取得したCookieを付けてGETリクエストを送ります。送信先は`outbound`で固定されています。
+
+この公開テスト用APIが返す値は、`accessToken: "interceptor-test-token"`と`fixture_session=dummy-session-not-a-secret`です。Cookieは`Set-Cookie`の最初のペアだけを取り出し、`Path`などの属性を除いて渡します。このサンプルをシミュレータで実行しても、別APIへのGETリクエストは送信しません。
+
+`fixtures/outbound-example/hooks/interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials/GET.ts`
+
+<<< ../fixtures/outbound-example/hooks/interceptor-traffic-fixture.lemonandchan.workers.dev/auth/credentials/GET.ts{ts}
+
+<<< ../fixtures/outbound-example/plugin.json{json}
