@@ -75,11 +75,31 @@ class OutboundMetadataTests(Case):
             with self.subTest(outbound=outbound):
                 self.rejects(outbound)
         for declaration in (None, [], {}, {'url': decl()['url'], 'method': 'GET'},
-                            {'url': decl()['url'], 'headers': []}, decl(extra=1), decl(method='POST'),
-                            decl(method='get'), dict(decl(), method=None), dict(decl(), headers={}),
+                            {'url': decl()['url'], 'headers': []}, decl(extra=1), decl(method='DELETE'),
+                            decl(method='get'), decl(method='post'), decl(method='Put'), decl(method='PATCH'), dict(decl(), method=None), dict(decl(), headers={}),
                             dict(decl(), headers='accept'), dict(decl(), url=1)):
             with self.subTest(declaration=declaration):
                 self.rejects({'a': declaration})
+
+    def test_accepts_exact_uppercase_post_and_put(self):
+        self.accepts({'a': decl(method='POST')})
+        self.accepts({'a': decl(method='PUT', headers=['content-type', 'authorization'])})
+        self.accepts({'g': decl(), 'p': decl(method='POST'), 'u': decl(method='PUT')})
+        self.rejects({'a': decl(method='DELETE')})
+        self.rejects({'a': decl(method='post')})
+        self.rejects({'a': decl(method='put')})
+        self.rejects({'a': decl(method='POST ')})
+
+    def test_post_put_stay_schema_two_and_pass_through_authored_metadata(self):
+        self.rejects({'a': decl(method='DELETE')})
+        with self.assertRaises(config.ToolError):
+            config.validate_manifest(manifest({'a': decl(method='POST')}, schema=1), 'manifest')
+        value = copy.deepcopy(BASE)
+        del value['matches']
+        value['outbound'] = {'create': decl(method='POST'), 'update': decl(method='PUT')}
+        path = self.tmp / 'plugin.json'
+        path.write_text(json.dumps(value))
+        self.assertEqual(route_sources.metadata(path)['outbound'], value['outbound'])
 
     def test_rejects_unsafe_urls(self):
         bad = ['http://example.com/', 'HTTPS://example.com/', 'https://Example.com/', 'https://example.com',

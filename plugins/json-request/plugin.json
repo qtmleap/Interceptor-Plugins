@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 2,
+  "id": "C4E7A2D1-8B35-4F96-A0D2-7E19B6C3F5A8",
+  "name": "JSON request",
+  "version": "2.0.0",
+  "read": {
+    "metadata": [
+      "method",
+      "host",
+      "path"
+    ],
+    "headers": [],
+    "queryKeys": [],
+    "body": {
+      "mode": "json"
+    }
+  },
+  "write": {
+    "requestBody": false,
+    "responseBody": false
+  },
+  "endpointBindings": [],
+  "settings": {},
+  "outbound": {
+    "create": {
+      "url": "https://api.example.com/v1/records",
+      "method": "POST",
+      "headers": [
+        "content-type"
+      ]
+    },
+    "replace": {
+      "url": "https://api.example.com/v1/records/latest",
+      "method": "PUT",
+      "headers": [
+        "content-type"
+      ]
+    }
+  }
+}

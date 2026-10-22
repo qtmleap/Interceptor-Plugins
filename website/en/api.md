@@ -142,19 +142,19 @@ Attempted body edits are errors. In synthetic tests, return actions based on the
 
 ## Interceptor.send {#interceptor-send}
 
-`Interceptor.send(binding, { headers })` requests a GET to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
+`Interceptor.send(binding, { headers, json? })` requests a GET, POST or PUT to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
 
 ```ts
 Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 ```
 
-The second argument and its `headers` map are required; pass `{ headers: {} }` when no headers are needed. `SendOptions` accepts only `headers`, a plain object of string values whose names are listed in the declaration. The declaration fixes the URL and `GET` method, and requests have no body. Passing `url`, `method`, `body` or non-string header values is an error.
+The second argument and its `headers` map are required; pass `{ headers: {} }` when no headers are needed. `SendOptions` accepts `headers`, a plain object of string values whose names are listed in the declaration, and an optional `json`. The declaration fixes the URL and method. `json` is allowed only for `POST` and `PUT` bindings; it is snapshotted when `send` is called (compact JSON of at most 8192 UTF-8 bytes and depth 16, using plain data only: no accessors, cycles, `NaN`, functions or `undefined`) and sent as the request body. Omitting `json` sends an empty body, and `json: null` sends `null`. A `content-type` header, if you set one together with `json`, must be exactly `application/json`; the app sends a single such header itself. Passing `json` to a `GET` binding, or passing `url`, `method`, `body` or non-string header values, is an error.
 
 Use `send` from any of the four existing hooks when the captured traffic meets its normal JSON body and other eligibility rules. The original request method need not be `GET`. Keep one direct top-level `attach` call and call `send` directly inside an `onEnter` or `onLeave` function registered by `attach`. Calling `send` through another variable or as `Interceptor['send']` is rejected. It also cannot run while `attach` registers the hooks.
 
 ### Declaring outbound requests {#outbound-metadata}
 
-Declare up to four named requests in `plugin.json`. Each one is exactly `url`, `method` (`"GET"`) and `headers` (up to eight lowercase names):
+Declare up to four named requests in `plugin.json`. Each one is exactly `url`, `method` (`"GET"`, `"POST"` or `"PUT"`, uppercase only) and `headers` (up to eight lowercase names):
 
 ```json
 "outbound": {

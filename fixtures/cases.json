@@ -668,5 +668,67 @@
     "expected": {
       "actions": []
     }
+  },
+  {
+    "name": "json-request posts and puts compact JSON bodies",
+    "plugin": "json-request",
+    "phase": "request.onLeave",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onLeave",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/events",
+        "body": {
+          "name": "launch",
+          "ignored": true
+        }
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "http",
+          "binding": "create",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "jsonBody": "{\"name\":\"launch\",\"source\":\"api.example.com/events\"}"
+        },
+        {
+          "type": "http",
+          "binding": "replace",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "jsonBody": "{\"latest\":{\"name\":\"launch\",\"source\":\"api.example.com/events\"}}"
+        }
+      ]
+    }
+  },
+  {
+    "name": "json-request ignores a body without a string name",
+    "plugin": "json-request",
+    "phase": "request.onLeave",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onLeave",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/events",
+        "body": {
+          "name": 5
+        }
+      }
+    },
+    "expected": {
+      "actions": []
+    }
   }
 ]

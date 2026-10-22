@@ -579,8 +579,11 @@ def validate_outbound_url(url, what):
             _fail(what, "url path has an invalid character")
 
 
+_OUTBOUND_METHODS = ("GET", "POST", "PUT")
+
+
 def validate_outbound(outbound, what):
-    """Optional schema 2 outbound request declarations: at most four named GET requests."""
+    """Optional schema 2 outbound request declarations: at most four named GET, POST or PUT requests."""
     if not isinstance(outbound, dict) or len(outbound) > 4:
         _fail(what, "expected at most 4 declarations")
     for name, declaration in outbound.items():
@@ -589,8 +592,8 @@ def validate_outbound(outbound, what):
             _fail(what, "invalid binding name")
         require_exact_keys(declaration, ("url", "method", "headers"), label)
         validate_outbound_url(declaration["url"], label)
-        if declaration["method"] != "GET":
-            _fail(label, "method must be GET")
+        if declaration["method"] not in _OUTBOUND_METHODS:
+            _fail(label, "method must be GET, POST or PUT")
         headers = _strings(declaration["headers"], label + " headers", 0, 8)
         if len(set(headers)) != len(headers):
             _fail(label, "duplicate header")

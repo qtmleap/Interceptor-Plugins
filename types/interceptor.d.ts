@@ -71,9 +71,15 @@ declare namespace Interceptor {
       onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome;
     };
   }
-  /** Options for `send`. Supply a string header map, including an empty map when no headers are needed. */
+  /**
+   * Options for `send`. Supply a string header map, including an empty map when no headers are needed.
+   * `json` is allowed only for bindings declared POST or PUT: it is snapshotted at send time (max 8192 UTF-8 bytes,
+   * depth 16) and sent as the body. A `content-type` header, if set, must be exactly `application/json`.
+   * Omit `json` for an empty body; the method and URL always come from the manifest.
+   */
   interface SendOptions {
     readonly headers: { readonly [name: string]: string };
+    readonly json?: JSON;
   }
   /**
    * Records an HTTP request intent for a binding declared in the manifest `outbound` metadata.

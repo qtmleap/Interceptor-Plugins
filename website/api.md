@@ -146,19 +146,19 @@ Interceptor.attach({
 
 ## Interceptor.send {#interceptor-send}
 
-`Interceptor.send(binding, { headers })`は、manifestの`outbound`に宣言した別のAPIへGETリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
+`Interceptor.send(binding, { headers, json? })`は、manifestの`outbound`に宣言した別のAPIへGET・POST・PUTリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
 
 ```ts
 Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 ```
 
-第2引数と、その中の`headers`は必須です。ヘッダーが不要なら`{ headers: {} }`を渡します。`SendOptions`に指定できるのは、文字列の値を持つ`headers`だけです。ヘッダー名は宣言の`headers`に含めます。URLと`GET`メソッドは宣言で固定し、本文は送れません。`url`、`method`、`body`、文字列以外のヘッダー値はエラーになります。
+第2引数と、その中の`headers`は必須です。ヘッダーが不要なら`{ headers: {} }`を渡します。`SendOptions`に指定できるのは、文字列の値を持つ`headers`と、省略可能な`json`です。ヘッダー名は宣言の`headers`に含めます。URLとメソッドは宣言で固定します。`json`は`POST`と`PUT`の宣言でのみ使え、`send`を呼んだ時点の内容がコンパクトなJSON（8192 UTF-8バイト以内、深さ16以内、アクセサ・循環参照・`NaN`・関数・`undefined`は不可）として本文に送られます。`json`を省略すると本文は空、`json: null`は`null`を送ります。`json`とあわせて`content-type`を指定する場合は`application/json`に完全一致させる必要があり、アプリが1つだけ付与します。`GET`の宣言に`json`を渡した場合や、`url`、`method`、`body`、文字列以外のヘッダー値はエラーになります。
 
 既存の4つのHookで、対象の通信がJSON本文などの実行条件を満たしている場合に呼べます。元の通信のメソッドを`GET`に限定するものではありません。ファイルのトップレベルでは`attach`を1回呼び、登録した`onEnter`または`onLeave`の関数内で`send`を直接呼びます。`send`を別の変数に代入して呼ぶ書き方や、`Interceptor['send']`は使えません。`attach`でHookを登録している間も`send`は呼べません。
 
 ### outboundの宣言 {#outbound-metadata}
 
-`plugin.json`に、名前付きのリクエストを最大4件宣言します。各項目は`url`、`method`（`"GET"`）、`headers`（小文字の名前を最大8件）だけです。
+`plugin.json`に、名前付きのリクエストを最大4件宣言します。各項目は`url`、`method`（`"GET"`、`"POST"`、`"PUT"`。大文字のみ）、`headers`（小文字の名前を最大8件）だけです。
 
 ```json
 "outbound": {

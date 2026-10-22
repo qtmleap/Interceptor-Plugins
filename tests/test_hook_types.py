@@ -73,7 +73,7 @@ Interceptor.send('lookup', {});
 Interceptor.send('lookup', {headers: {}, url: 'https://example.com/'});
 // @ts-expect-error the method is declared in the manifest
 Interceptor.send('lookup', {headers: {}, method: 'POST'});
-// @ts-expect-error bodies are not supported
+// @ts-expect-error raw bodies are not supported
 Interceptor.send('lookup', {headers: {}, body: {}});
 // @ts-expect-error header values are plain strings
 Interceptor.send('lookup', {headers: {a: 1}});
@@ -86,6 +86,46 @@ void options;
 '''
         with tempfile.TemporaryDirectory(prefix='send-types-') as temporary:
             path = Path(temporary) / 'send.ts'
+            path.write_text(f'/// <reference path="{ROOT / "types/interceptor.d.ts"}" />\n' + source)
+            result = subprocess.run(['bun', str(ROOT / 'node_modules/typescript/bin/tsc'), '--strict',
+                                     '--noEmit', '--target', 'ES2020', str(path)], capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_send_json_option_is_typed_and_registered_callbacks_accept_it(self):
+        source = '''
+Interceptor.attach({
+  response: {
+    onLeave(response) {
+      Interceptor.send('create', {headers: {'content-type': 'application/json'}, json: {a: 1, list: [true, null, 'x']}});
+      Interceptor.send('create', {headers: {}, json: null});
+      Interceptor.send('update', {headers: {}, json: 'text'});
+      Interceptor.send('update', {headers: {}});
+    }
+  }
+});
+// legacy GET shape is unchanged
+Interceptor.send('lookup', {headers: {authorization: 'Bearer x'}});
+const options: Interceptor.SendOptions = {headers: {}, json: {nested: {value: 1}}};
+void options;
+const result: void = Interceptor.send('create', {headers: {}, json: []});
+void result;
+// @ts-expect-error jsonBody is internal to the host action, not a script option
+Interceptor.send('create', {headers: {}, jsonBody: '{}'});
+// @ts-expect-error methods are declared in the manifest
+Interceptor.send('create', {headers: {}, json: {}, method: 'PUT'});
+// @ts-expect-error URLs come from the manifest
+Interceptor.send('create', {headers: {}, json: {}, url: 'https://example.com/'});
+// @ts-expect-error functions are not JSON
+Interceptor.send('create', {headers: {}, json: () => {}});
+// @ts-expect-error symbols are not JSON
+Interceptor.send('create', {headers: {}, json: Symbol('s')});
+// @ts-expect-error the headers map stays required with json
+Interceptor.send('create', {json: {}});
+// @ts-expect-error raw body option is not supported
+Interceptor.send('create', {headers: {}, body: {}});
+'''
+        with tempfile.TemporaryDirectory(prefix='send-json-types-') as temporary:
+            path = Path(temporary) / 'send-json.ts'
             path.write_text(f'/// <reference path="{ROOT / "types/interceptor.d.ts"}" />\n' + source)
             result = subprocess.run(['bun', str(ROOT / 'node_modules/typescript/bin/tsc'), '--strict',
                                      '--noEmit', '--target', 'ES2020', str(path)], capture_output=True, text=True, timeout=30)

@@ -198,12 +198,56 @@
       }
     },
     {
-      "name": "non-get-secondary-request",
-      "valid": false,
+      "name": "post-declaration",
+      "valid": true,
       "outbound": {
         "lookup": {
           "url": "https://api.example.com/profile",
           "method": "POST",
+          "headers": []
+        }
+      }
+    },
+    {
+      "name": "put-declaration",
+      "valid": true,
+      "outbound": {
+        "lookup": {
+          "url": "https://api.example.com/profile",
+          "method": "PUT",
+          "headers": []
+        }
+      }
+    },
+    {
+      "name": "delete-unsupported",
+      "valid": false,
+      "outbound": {
+        "lookup": {
+          "url": "https://api.example.com/profile",
+          "method": "DELETE",
+          "headers": []
+        }
+      }
+    },
+    {
+      "name": "lowercase-post",
+      "valid": false,
+      "outbound": {
+        "lookup": {
+          "url": "https://api.example.com/profile",
+          "method": "post",
+          "headers": []
+        }
+      }
+    },
+    {
+      "name": "lowercase-put",
+      "valid": false,
+      "outbound": {
+        "lookup": {
+          "url": "https://api.example.com/profile",
+          "method": "put",
           "headers": []
         }
       }
