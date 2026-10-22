@@ -79,7 +79,7 @@ declare namespace Interceptor {
    */
   interface SendOptions {
     readonly headers: { readonly [name: string]: string };
-    readonly json?: JSON;
+    readonly json?: ReadOnlyJSON;
   }
   /**
    * Records an HTTP request intent for a binding declared in the manifest `outbound` metadata.

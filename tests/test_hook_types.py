@@ -94,8 +94,14 @@ void options;
     def test_send_json_option_is_typed_and_registered_callbacks_accept_it(self):
         source = '''
 Interceptor.attach({
+  request: {
+    onLeave(request) {
+      if (request.body !== undefined) Interceptor.send('create', {headers: {}, json: request.body});
+    }
+  },
   response: {
     onLeave(response) {
+      if (response.body !== undefined) Interceptor.send('create', {headers: {}, json: response.body});
       Interceptor.send('create', {headers: {'content-type': 'application/json'}, json: {a: 1, list: [true, null, 'x']}});
       Interceptor.send('create', {headers: {}, json: null});
       Interceptor.send('update', {headers: {}, json: 'text'});
@@ -107,6 +113,10 @@ Interceptor.attach({
 Interceptor.send('lookup', {headers: {authorization: 'Bearer x'}});
 const options: Interceptor.SendOptions = {headers: {}, json: {nested: {value: 1}}};
 void options;
+const tuple = [1, 'x', null] as const;
+Interceptor.send('create', {headers: {}, json: tuple});
+const nested: {readonly values: readonly (readonly number[])[]} = {values: [[1, 2]]};
+Interceptor.send('create', {headers: {}, json: nested});
 const result: void = Interceptor.send('create', {headers: {}, json: []});
 void result;
 // @ts-expect-error jsonBody is internal to the host action, not a script option

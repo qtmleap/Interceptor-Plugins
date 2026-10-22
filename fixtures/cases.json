@@ -730,5 +730,44 @@
     "expected": {
       "actions": []
     }
+  },
+  {
+    "name": "json-request preserves an astral character at the truncation boundary",
+    "plugin": "json-request",
+    "phase": "request.onLeave",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.onLeave",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "api.example.com",
+        "path": "/events",
+        "body": {
+          "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀suffix"
+        }
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "http",
+          "binding": "create",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "jsonBody": "{\"name\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀\",\"source\":\"api.example.com/events\"}"
+        },
+        {
+          "type": "http",
+          "binding": "replace",
+          "headers": {
+            "content-type": "application/json"
+          },
+          "jsonBody": "{\"latest\":{\"name\":\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx😀\",\"source\":\"api.example.com/events\"}}"
+        }
+      ]
+    }
   }
 ]
