@@ -1,0 +1,343 @@
+[
+  {
+    "name": "summary GET",
+    "plugin": "request-summary",
+    "hook": "request",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.completed",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "summary": "GET example.com/synthetic"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "summary GET other path",
+    "plugin": "request-summary",
+    "hook": "request",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.completed",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/a/b"
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "summary": "GET example.com/a/b"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "summary POST ignored",
+    "plugin": "request-summary",
+    "hook": "request",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.completed",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "POST",
+        "host": "example.com",
+        "path": "/synthetic"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "summary other host ignored",
+    "plugin": "request-summary",
+    "hook": "request",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.completed",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "example.org",
+        "path": "/synthetic"
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "summary wrong hook",
+    "plugin": "request-summary",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503
+      }
+    },
+    "expectError": "scriptError"
+  },
+  {
+    "name": "filter 503",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "host": "example.com",
+            "status": 503
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "filter 500 lower bound",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 500
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "host": "example.com",
+            "status": 500
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "filter 599 upper bound",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 599
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "host": "example.com",
+            "status": 599
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "filter 200 ignored",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 200
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter 499 ignored",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 499
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter 600 ignored",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 600
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter other host ignored",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "GET",
+        "host": "example.org",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "filter POST 503 still reported",
+    "plugin": "server-error-filter",
+    "hook": "response",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "response.completed",
+      "time": "2026-01-01T00:00:01Z",
+      "request": {
+        "method": "POST",
+        "host": "example.com",
+        "path": "/synthetic"
+      },
+      "response": {
+        "status": 503
+      }
+    },
+    "expected": {
+      "actions": [
+        {
+          "type": "webhook",
+          "endpointId": "5E1D0C4A-0000-4000-8000-00000000A001",
+          "json": {
+            "host": "example.com",
+            "status": 503
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "filter wrong hook",
+    "plugin": "server-error-filter",
+    "hook": "request",
+    "event": {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "exchangeID": "00000000-0000-4000-8000-000000000002",
+      "phase": "request.completed",
+      "time": "2026-01-01T00:00:00Z",
+      "request": {
+        "method": "GET",
+        "host": "example.com",
+        "path": "/synthetic"
+      }
+    },
+    "expectError": "scriptError"
+  }
+]

@@ -1,28 +1,38 @@
 ---
-title: Development container
+title: Development environment
 lang: en-US
 ---
 
-# Development container
-
-A development environment adapted from `qtmleap/devcontainers`. It provides Ubuntu 24.04, Bun %%BUN_VERSION%%, Python 3, OpenSSL, GitHub CLI, Rust and a C compiler.
+# Development environment
 
 ## Use it
 
-Have Docker and VS Code ready, then run **Dev Containers: Reopen in Container**. Dependencies install with `bun install --frozen-lockfile --ignore-scripts`.
+Install Docker, VS Code and the Dev Containers extension, then start Docker. Open this repository's root folder in VS Code, then run **Dev Containers: Reopen in Container** from the Command Palette. Dependencies install with `bun install --frozen-lockfile --ignore-scripts`. Plugin development does not require Xcode.
+
+Write hooks in `plugins/NAME/hooks/{host}/{path}/{METHOD}.ts`, then generate and validate them with the commands below. See [Authoring](authoring.md) for the layout and callback examples.
 
 ```sh
-bun run check
-bun run build
+bun run build:dev
+bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
+bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
+bun run check:authoring
 ```
 
-`check` covers compilation, package generation, QuickJS execution, signing and tamper rejection. It uses temporary test keys and needs no GitHub credentials or production key. The build output must be absent or empty.
+`build:dev` generates unsigned packages in `build/dev/plugins/`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
+
+The simulator's `check` command checks the generated JavaScript's syntax; `run-package` checks a hook from the package for the supplied input.
+
+VS Code applies the SDK types independently to each hook file without emitting JavaScript. Build and authoring-check tasks are also available. Use `build:dev` and `check:authoring` to validate file locations and the allowed syntax.
+
+`bun run check` also covers signing and tamper rejection. It uses temporary test keys and needs no GitHub credentials or production key. The existing `bun run build` remains available; its `build/site/` output must be absent or empty.
 
 To initialize your own signed repository, sign in with `gh auth login` inside the container, then run `bun run setup`. See [Publishing](publishing.md).
 
 ## Resume setup after authentication stops it
 
-Attach to the existing running container and run these commands inside it. The final command resumes the lifecycle and installs dependencies after login.
+Building and checking plugins do not themselves require GitHub credentials. This environment's initial setup can still stop at the commit guard's authentication check for protected Git operations.
+
+Attach to the existing running container and run these commands inside it. After GitHub login, `commitguard/setup` repeats the authentication check required for Git operations. `postCreateCommand.sh` then resumes initial setup, including dependency installation.
 
 ```sh
 cd /home/vscode/app

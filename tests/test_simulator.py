@@ -83,7 +83,8 @@ class SimulatorTests(unittest.TestCase):
     def test_engine_flags_and_limits_match_the_pinned_app(self):
         import math
         import re
-        package = BINARY.parent.parent / 'interceptor/Packages/InterceptorAutomation'
+        package = Path(os.environ.get('INTERCEPTOR_AUTOMATION_PACKAGE',
+                                      BINARY.parent.parent / 'interceptor/Packages/InterceptorAutomation'))
         app = (package / 'Sources/AutomationRuntime/JavaScriptExecutor.swift').read_text()
         rust = (ROOT / 'tools/simulator/src/main.rs').read_text()
         def product(text):

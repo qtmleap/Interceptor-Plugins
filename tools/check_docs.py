@@ -16,9 +16,9 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 from repository_config import BASELINE_URLS, ToolError, load_json, parse_args, run_main
 
-PAGES = ("index", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
+PAGES = ("index", "what-is-interceptor", "getting-started", "authoring", "api", "examples", "publishing", "devcontainer")
 LOCALES = {"": "ja", "en": "en"}  # directory under website/ -> <html lang>
-INCLUDE_ROOTS = ("src", "types", "manifests", "fixtures")
+INCLUDE_ROOTS = ("plugins", "src", "types", "manifests", "fixtures")
 FORBIDDEN_SUFFIXES = (".md", ".py", ".sh", ".key", ".pem", ".ts", ".swift", ".lock")
 SEARCH_LOCALES = ("root", "en")
 SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
@@ -72,10 +72,9 @@ def resolve_include(root, website, page, target):
         try:
             relative = candidate.relative_to(allowed)
         except ValueError:
-            try:
-                relative = Path(os.path.realpath(candidate)).relative_to(allowed)
-            except ValueError:
-                continue
+            continue
+        if allowed.is_symlink():
+            return f"include crosses a symlink: {target}"
         walk = allowed
         for part in relative.parts:
             walk = walk / part
@@ -282,7 +281,7 @@ def load_context(path):
 
 
 def run_checks(root, site_dir, context):
-    root = Path(root)
+    root = Path(root).absolute()
     website = root / "website"
     errors = check_locales(website) + check_includes(root, website)
     site = Site(site_dir, context["base"] if context else "/")

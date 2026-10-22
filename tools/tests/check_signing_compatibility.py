@@ -35,7 +35,9 @@ def main():
         config['publicKeyFingerprint'] = fingerprint
         configured = temp / 'configured'; configured.mkdir()
         (configured / 'repository-config.json').write_text(json.dumps(config))
-        shutil.copytree(root / 'manifests', configured / 'manifests')
+        for folder in ('plugins', 'src', 'scripts', 'manifests'):
+            if (root / folder).exists():
+                shutil.copytree(root / folder, configured / folder)
         native_site = temp / 'native'
         run(sys.executable, root / 'tools/build.py', '--root', root, '--output', native_site)
         portable_site = temp / 'portable'; shutil.copytree(native_site, portable_site)
@@ -43,6 +45,21 @@ def main():
             run(tool, 'publish', site, '--id', config['id'], '--name', config['name'], '--sequence', '42', '--key', key)
             for verifier in (args.verifier, portable):
                 run(verifier, 'verify-local', configured, site, '--signed')
+        # Both source verifiers compare exact UTF-8, not Swift's canonical String equality.
+        shutil.copytree(root / 'fixtures', configured / 'fixtures')
+        shutil.copytree(root / 'build/scripts', configured / 'build/scripts')
+        mismatch = temp / 'source-mismatch'; shutil.copytree(portable_site, mismatch)
+        package_path = mismatch / 'plugins/request-summary.json'
+        package = json.loads(package_path.read_text())
+        selected = package['manifest']['matches'][0]['hooks']['request']['onEnter']
+        original = package['sourceFiles'][selected]
+        package['sourceFiles'][selected] = original + "\nconst marker = 'caf\u00e9';\n"
+        package_path.write_text(json.dumps(package, ensure_ascii=False))
+        (configured / 'build/scripts/request-summary' / selected).write_text(original + "\nconst marker = 'cafe\u0301';\n")
+        for verifier in (args.verifier, portable):
+            result = subprocess.run([str(verifier), 'samples', str(configured), str(mismatch)], capture_output=True)
+            assert result.returncode != 0 and b'sourceFiles differ' in result.stderr, result.stderr.decode(errors='replace')
+        print('Swift/Python source verification rejects Unicode-equivalent but byte-distinct JavaScript.')
         # Each implementation signs history that the other must verify.
         for generator, source, verifier in ((root / 'tools/tests/history_fixture.py', portable_site, args.verifier),
                                             (root / 'tools/tests/HistoryFixture.swift', native_site, portable)):

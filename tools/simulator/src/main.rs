@@ -16,6 +16,7 @@ struct Limits {
     max_result_depth: usize,
     max_actions: usize,
 }
+const MAX_PACKAGE_BYTES: usize = 256 * 1024;
 const LIMITS: Limits = Limits {
     deadline_ms: 50,
     heap_bytes: 8 * 1024 * 1024,
@@ -39,6 +40,17 @@ extern "C" {
     fn qjs_cancel_token_new() -> *mut std::ffi::c_void;
     fn qjs_cancel_token_free(token: *mut std::ffi::c_void);
     fn qjs_run(
+        token: *mut std::ffi::c_void,
+        limits: *const Limits,
+        source: *const u8,
+        source_len: usize,
+        hook: *const std::ffi::c_char,
+        event: *const u8,
+        event_len: usize,
+        config: *const u8,
+        config_len: usize,
+    ) -> QjsResult;
+    fn qjs_run_v2(
         token: *mut std::ffi::c_void,
         limits: *const Limits,
         source: *const u8,
@@ -103,7 +115,7 @@ fn execute(args: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     if args.is_empty() || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h")) {
-        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run prints action JSON only; no webhooks are sent.");
+        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
         return Ok(0);
     }
     match (args[0].as_str(), args.len()) {
@@ -134,16 +146,39 @@ fn execute(args: &[String]) -> Result<i32, String> {
             }
             Ok(status)
         }
-        ("run", 5) => {
-            if !matches!(args[2].as_str(), "onRequest" | "onResponse") {
-                return Err("hook must be onRequest or onResponse".into());
+        ("run", 5) | ("run-package", 5) => {
+            let v2 = args[0] == "run-package";
+            let allowed: &[&str] = if v2 {
+                &[
+                    "request.onEnter",
+                    "request.onLeave",
+                    "response.onEnter",
+                    "response.onLeave",
+                ]
+            } else {
+                &["onRequest", "onResponse"]
+            };
+            if !allowed.contains(&args[2].as_str()) {
+                return Err(if v2 {
+                    "hook must be request.onEnter, request.onLeave, response.onEnter or response.onLeave"
+                } else {
+                    "hook must be onRequest or onResponse"
+                }
+                .into());
             }
-            let source = read_regular(&args[1], LIMITS.max_source_bytes)?;
+            let source = read_regular(
+                &args[1],
+                if v2 {
+                    MAX_PACKAGE_BYTES
+                } else {
+                    LIMITS.max_source_bytes
+                },
+            )?;
             let event = read_regular(&args[3], LIMITS.max_event_bytes)?;
             let config = read_regular(&args[4], LIMITS.max_config_bytes)?;
-            for input in [&event, &config] {
+            for input in [&event, &config].into_iter().chain(v2.then_some(&source)) {
                 if unsafe { sim_validate_json(input.as_ptr(), input.len(), 1, 64) } == 0 {
-                    return Err("event and config must be strict JSON objects".into());
+                    return Err("event, config and package must be strict JSON objects".into());
                 }
             }
             let hook = CString::new(args[2].as_bytes()).map_err(|_| "invalid hook")?;
@@ -152,17 +187,31 @@ fn execute(args: &[String]) -> Result<i32, String> {
                 return Ok(7);
             }
             let result = unsafe {
-                qjs_run(
-                    token.0,
-                    &LIMITS,
-                    source.as_ptr(),
-                    source.len(),
-                    hook.as_ptr(),
-                    event.as_ptr(),
-                    event.len(),
-                    config.as_ptr(),
-                    config.len(),
-                )
+                if v2 {
+                    qjs_run_v2(
+                        token.0,
+                        &LIMITS,
+                        source.as_ptr(),
+                        source.len(),
+                        hook.as_ptr(),
+                        event.as_ptr(),
+                        event.len(),
+                        config.as_ptr(),
+                        config.len(),
+                    )
+                } else {
+                    qjs_run(
+                        token.0,
+                        &LIMITS,
+                        source.as_ptr(),
+                        source.len(),
+                        hook.as_ptr(),
+                        event.as_ptr(),
+                        event.len(),
+                        config.as_ptr(),
+                        config.len(),
+                    )
+                }
             };
             if result.status == 0 {
                 if result.data.is_null() || result.length > LIMITS.max_result_bytes {

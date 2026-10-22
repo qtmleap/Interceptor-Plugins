@@ -26,7 +26,7 @@ class ReadOnlyAPI:
 
 class PublishGateTests(unittest.TestCase):
     def test_unconfigured_copies_fail_before_entering_signing_environment(self):
-        workflow = (REPO / '.github/workflows/publish.yml').read_text()
+        workflow = (REPO / '.github/workflows/deployment.yaml').read_text()
         jobs = dict(re.findall(r'^  ([a-z][a-z-]*):\n(.*?)(?=^  [a-z][a-z-]*:|\Z)', workflow,
                                re.MULTILINE | re.DOTALL))
         self.assertIn('preflight', jobs)

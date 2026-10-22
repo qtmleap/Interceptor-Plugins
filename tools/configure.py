@@ -44,7 +44,8 @@ def main(argv):
     for name, manifest in samples:
         manifest = dict(manifest, id=new_uuid(taken))
         taken.add(manifest["id"])
-        files[root / "manifests" / f"{name}.json"] = dump_json(manifest)
+        target = root / "plugins" / name / "plugin.json" if manifest["schemaVersion"] == 2 else root / "manifests" / f"{name}.json"
+        files[target] = dump_json(manifest)
 
     config.update(id=repository_id, name=options["--name"], githubRepository=repository, repositoryURL=url,
                   publicKeyFingerprint=fingerprint)

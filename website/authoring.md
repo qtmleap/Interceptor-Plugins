@@ -1,88 +1,165 @@
 ---
-title: TypeScriptの書き方
+title: プラグインを書く
 lang: ja
 ---
 
-# TypeScriptの書き方
+<script setup>
+import HookFlow from './.vitepress/components/HookFlow.vue'
+</script>
 
-## ファイルの構成
+# プラグインを書く
 
-`src/NAME.ts`、`manifests/NAME.json`、`fixtures/cases.json` を一緒に編集します。ソースとmanifestのファイル名は、拡張子を除いて同じ小文字のkebab-caseにします。リポジトリ／プラグインのIDは初回セットアップ後に変更しません。
+`POST https://api.example.com/search`のJSONを変更するプラグインを作ります。対象の通信に対応する場所へファイルを置き、リクエストとレスポンスの転送前に本文を書き換えます。
+
+このガイドで扱うスキーマ2と実通信のHookは開発中です。
 
 ## 必要なツール
 
-LinuxとmacOSのどちらでも同じコマンドを使えます。Bun %%BUN_VERSION%%、Python 3、OpenSSL、Git、RustとCコンパイラを用意してください。[開発コンテナ](devcontainer.md)にはこれらのツールが含まれます。
+LinuxとmacOSで同じコマンドを使えます。Bun %%BUN_VERSION%%、Python 3、OpenSSL、Git、Rust、Cコンパイラを用意してください。[開発環境](devcontainer.md)にも含まれています。プラグインの作成・テスト・署名にXcodeは不要です。
 
-## プラグインを追加する
+## ファイルの構成
 
-既存のTypeScriptとmanifestをコピーして、新しい小文字のkebab-case名に変更します。拡張子を除いたファイル名は、両方で統一してください。manifestの `id` には重複しないUUIDを一度生成し、公開後も同じ値を使います。
+1つのプラグインを`plugins/NAME/`にまとめます。`plugin.json`に名前・バージョン・読み書きの権限を、`hooks/`以下に処理を書きます。対象条件やファイルの一覧は`plugin.json`に書きません。
+
+`publishedAt`には発行元が指定した発行日時をUTCの`yyyy-MM-ddTHH:mm:ssZ`形式で記載できます。ビルドでは指定した値がそのまま保持され、日時を自動で補うことはありません。省略した場合、発行日は表示されません。
+
+```text
+plugins/request-summary/
+├── plugin.json
+└── hooks/
+    └── api.example.com/
+        └── search/
+            └── POST.ts
+```
+
+`hooks/{host}/{path}/{METHOD}.ts`の配置で、対象の通信が決まります。この例では`POST https://api.example.com/search`です。`hooks/api.example.com/GET.ts`なら`GET https://api.example.com/`、`hooks/api.example.com/v1/items/PUT.ts`なら`PUT https://api.example.com/v1/items`を対象にします。
+
+別のAPIにも処理を加えるときは、その対象に対応する場所へファイルを追加します。対象条件とスクリプトの対応は、ビルドがファイルの配置とHookの定義から生成します。
+
+新しいプラグインにはUUIDを一度生成し、`plugin.json`の`id`に記載します。公開後は同じIDを使い続けます。
 
 ```sh
 python3 -c 'import uuid; print(uuid.uuid4())'
 ```
 
-`fixtures/cases.json` に各プラグインのテストを最低1件追加します。配列の各要素は次の形式です。
+<HookFlow locale="ja" />
 
-| キー | 内容 |
-|---|---|
-| `name` | テストの表示名 |
-| `plugin` | 拡張子を除いたファイル名（例: `request-summary`） |
-| `hook` | `request` または `response` |
-| `event` | フックへ渡す入力オブジェクト |
-| `expected` | 期待する戻り値のJSON（`actions` を含む） |
-| `expectError` | エラーを期待する場合の `"scriptError"` |
+## JSONを変更する {#jsonを変更する}
 
-`expected` と `expectError` はどちらか片方だけを指定します。[実際のテストデータ](https://github.com/%%GITHUB_REPOSITORY%%/blob/master/fixtures/cases.json)を参考に、動作するケースと何もしないケースを確認してください。
+`POST.ts`で`Interceptor.attach`にHookを定義します。
 
-## ビルドとテスト
+```ts
+Interceptor.attach({
+  request: {
+    onEnter(req, cfg) {
+      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;
+      req.body.limit = 5;
+    }
+  },
+  response: {
+    onEnter(res, cfg) {
+      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;
+      res.body.maintenance = true;
+    }
+  }
+});
+```
+
+`req`はリクエスト、`res`はレスポンス、`cfg`はプラグインの設定です。この例では`cfg`を使いません。設定が不要なら、第2引数の宣言は省略できます。
+
+この例は、本文がJSONオブジェクトの場合だけ項目を変更します。本文がない場合や配列の場合は、変更しません。対象のホスト・パス・メソッドは、生成されたmanifestを使ってInterceptorが判定します。
+
+読み書きするデータと権限は`plugin.json`で指定します。JSON本文を変更するには、読み取りと対応する書き込み権限の両方が必要です。
+
+<<< ../plugins/request-summary/plugin.json{json}
+
+リクエストが次のJSONなら、`limit`を`50`から`5`に変えてサーバーへ送ります。
+
+```json
+{"query":"x","limit":50}
+```
+
+```json
+{"query":"x","limit":5}
+```
+
+サーバーが次のJSONを返したら、`maintenance`を追加してクライアントへ返します。
+
+```json
+{"ok":true}
+```
+
+```json
+{"ok":true,"maintenance":true}
+```
+
+`body`はパース済みのJSONです。項目への代入や配列の操作をそのまま書けます。入力JSONの構造は対象APIに合わせて確認してください。転送後の処理は`request.onLeave`と`response.onLeave`に書きます。[4つのHook](api.md#request-onenter)で、それぞれの使い方を説明しています。
+
+## テストを書く
+
+`fixtures/cases.json`に入力と期待する結果を追加します。ここに書いたケースは`bun run check`で実行します。スキーマ2のテストでは`phase`に4つのHook名のいずれかを指定します。
+
+```json
+{
+  "name": "search limit changed to five on enter",
+  "plugin": "request-summary",
+  "phase": "request.onEnter",
+  "event": {
+    "phase": "request.onEnter",
+    "request": {
+      "method": "POST",
+      "host": "api.example.com",
+      "path": "/search",
+      "body": {"query":"x","limit":50}
+    }
+  },
+  "expected": {
+    "actions": [],
+    "mutation": {"body":{"query":"x","limit":5}}
+  }
+}
+```
+
+`mutation`は実行環境が作る結果です。作者はHook内で`body`を変更するだけで、`mutation`を組み立てる必要はありません。`expected`の代わりに`expectError: "scriptError"`を指定すると、エラーになることを確認できます。条件に一致しないケースと、転送後に書き換えようとして失敗するケースも確認してください。
+
+## ビルドと検証
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
-bun run check:authoring   # 型チェック、Python/HTTPS、パッケージ生成
-bun run check             # QuickJS、署名、改ざん検出まで含めた検証
-bun run build             # 未署名の開発用パッケージを build/site/ に生成
+bun run build:dev
+bun run check:authoring
+bun run check
 ```
 
-- TypeScript 5.8.3 は `bun.lock` で固定されています。
-- `bun run build` の出力先 `build/site/` は存在しないか空である必要があります。再実行する前に、前回の生成物だけを削除してください。
-- `build/scripts/` の生成JavaScriptは編集もcommitもしません。パッケージ生成のたびにTypeScriptから再生成されます。
-- 署名鍵はテスト後に公開用ワークフローが用意します。手元で署名する必要はありません。
+`build:dev`は未署名のパッケージを`build/dev/plugins/NAME.json`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
 
-## バージョンを更新する
+`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。従来の`bun run build`は`build/site/`に生成し、出力先が存在しないか空であることを求めます。
 
-ソース、生成されるバイト列、型宣言のいずれかを変えたら、manifestの `version` を上げます。サンプルはv1 manifestのバージョン 1.0.1 です。アプリ側の新しいスキーマは不要です。
+VS CodeではSDKの型で各Hookファイルをチェックし、JavaScriptは出力しません。ビルド用と検証用のタスクも選べます。ファイルの配置や使える構文は、ビルド時にも確認します。
 
-## フックを書く
+`build/manifests/NAME.json`にmanifest、`build/scripts/NAME/`にJavaScriptが生成されます。パッケージは`{manifest, sourceFiles}`という構成で、`manifest.matches`に対象条件とHookごとのファイル名、`sourceFiles`に各JSファイルの本文が入ります。生成物は直接編集したりcommitしたりせず、ソースを変更してビルドし直します。公開済みの内容を変えるときは`plugin.json`の`version`を上げます。
 
-manifestに宣言した購読に対応するよう、トップレベルに `onRequest` または `onResponse` という関数を定義します。各プラグインは別々にコンパイルされるため、ファイル間で関数名が重複しても構いません。
+## Rustシミュレーター
 
-<<< ../src/request-summary.ts{ts}
-
-このサンプルでは、テスト用の `preview` バインディングと入力を使います。新しいフックを書くときは、バインディングや省略可能な入力項目を確認し、必要な値がなければ `{ actions: [] }` を返してください。
-
-型は [APIリファレンス](api.md) を参照してください。
-
-
-
-## シミュレーター
-
-先に `bun run check` を実行すると、例で使う `build/scripts/request-summary.js` が生成されます。入力ファイルの内容は[APIのテスト入力](api.md#テスト入力)を参照してください。
-
-Rust製の `interceptor-simulator` は、アプリと同じQuickJSでJavaScriptを検査・実行するコマンドです。初回はバージョンを固定したQuickJSのソースを取得し、RustとCコンパイラでビルドします。
+Rust製の`interceptor-simulator`はアプリと同じQuickJSで構文と実行結果を確認するコマンドです。初回は固定された版のソースを取得し、RustとCコンパイラでビルドします。
 
 ```sh
-bun run simulator check build/scripts/request-summary.js
-bun run simulator run build/scripts/request-summary.js onRequest fixtures/request-event.json fixtures/config.json
+bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
+bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
-`check` は構文だけを検査し、スクリプトを実行しません。構文が正しくても、フックが存在しないことや戻り値の不正は検出できません。入力JSONを使う `run` と、期待値まで比較する `bun run check` も実行してください。`run` が返すアクションはJSONとして表示され、Webhookは送信されません。
+コマンドに指定した2つの入力ファイルは、このリポジトリに含まれています。`fixtures/request-event.json`は通信データ、`fixtures/config.json`はHookの第2引数に渡す設定です。
 
-ビルド後は `.tools/bin/interceptor-simulator` を直接実行できます。同じOS・CPU向けのバイナリなら、実行時にBun、Python、Rust、Xcodeは不要です。Linux版にはビルド先と互換性のあるシステムライブラリが必要です。
+<<< ../fixtures/request-event.json{json}
 
-## 実行環境の制約
+<<< ../fixtures/config.json{json}
 
-実行環境では、1つのグローバルスクリプトを評価してフックを同期的に呼び出します。import/export、非同期コード、Promise、TypedArray、Node／ブラウザAPIは使えません。`fetch`、console、ファイルシステム、タイマー、モジュールローダーもありません。コンパイラはこれらの一般的な構文を拒否しますが、セキュリティサンドボックスではありません。スクリプトはアプリ内の制限付きQuickJS環境で実行されます。
+自分のAPIを試すときは、これらをコピーして入力を変更します。`fixtures/cases.json`は期待結果まで記載したテストケース集で、`run-package`にそのまま渡すファイルではありません。
 
-プレビューが返すWebhookへの送信要求（intent）は最大2件です。実際の送信や、キャプチャした通信に合わせた自動実行は行いません。SHA-256は生成されたパッケージのバイト列から計算し、署名付きの一覧がそのハッシュを認証します。
+シミュレーターの`check`サブコマンドは、生成されたJavaScriptの構文だけを検査し、Hookの処理は実行しません。`run-package`サブコマンドはパッケージのmanifestから、入力の通信条件とHookに合うファイルを選んで実行します。条件判定・権限・JSONの変更を含む結果を表示し、一致しないファイルは実行しません。転送やWebhook送信は行いません。実際のネットワーク上の順序はアプリ側で確認します。
 
-公開は[公開](publishing.md)、Linuxでの開発は[開発コンテナ](devcontainer.md)を参照してください。
+ビルド後は`.tools/bin/interceptor-simulator`を直接実行できます。同じOS・CPU向けのバイナリなら、実行時にBun、Python、Rust、Xcodeは不要です。Linux版にはビルド先と互換性のあるシステムライブラリが必要です。
+
+## 公開する
+
+パッケージの署名にはEd25519を使います。署名鍵は[公開](publishing.md)のセットアップで登録します。masterへのpush後はCIが署名して配布するため、手元で毎回署名する必要はありません。

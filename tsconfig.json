@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "target": "ES2020",
+    "module": "None",
+    "moduleDetection": "force",
+    "lib": ["ES2020"],
+    "types": [],
+    "noEmit": true
+  },
+  "include": ["types/interceptor.d.ts", "plugins/*/hooks/**/*.ts", "src/*.ts"]
+}

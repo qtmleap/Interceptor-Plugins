@@ -1,10 +1,12 @@
 import { fileURLToPath } from 'node:url'
+import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import { loadContext, plainValues, substitute } from './metadata.mts'
 import { substituteFrontmatter, tokenPlugin } from './tokens.mts'
 
 const context = loadContext()
 const SOURCE = 'https://github.com/' + context.githubRepository
+const siteTitle = context.githubRepository === 'qtmleap/Interceptor-Plugins' ? 'Interceptor Plugins' : context.name
 
 const texts = {
   root: { unconfigured: '未設定' },
@@ -13,40 +15,68 @@ const texts = {
 
 const textsFor = (relativePath: string) => (relativePath.startsWith('en/') ? texts.en : texts.root)
 
-const pages = ['getting-started', 'authoring', 'api', 'examples', 'publishing', 'devcontainer'] as const
-
 const labels = {
   root: {
+    'what-is-interceptor': 'Interceptorとは',
     'getting-started': 'はじめに',
-    authoring: 'プラグインを書く',
+    authoring: '作成',
     api: 'API',
     examples: 'サンプル',
     publishing: '公開',
-    devcontainer: '開発コンテナー'
+    devcontainer: '開発環境'
   },
   en: {
+    'what-is-interceptor': 'What is Interceptor?',
     'getting-started': 'Getting started',
-    authoring: 'Writing a plugin',
+    authoring: 'Authoring',
     api: 'API',
     examples: 'Examples',
     publishing: 'Publishing',
-    devcontainer: 'Dev container'
+    devcontainer: 'Development environment'
   }
 } as const
 
 function nav(locale: 'root' | 'en'): DefaultTheme.NavItem[] {
   const prefix = locale === 'root' ? '/' : '/en/'
-  return pages.map((page) => ({ text: labels[locale][page], link: `${prefix}${page}` }))
+  return [
+    { text: locale === 'root' ? 'ガイド' : 'Guide', link: `${prefix}what-is-interceptor`, activeMatch: '/(what-is-interceptor|getting-started|authoring|examples|publishing|devcontainer)' },
+    { text: locale === 'root' ? 'リファレンス' : 'Reference', link: `${prefix}api`, activeMatch: '/api' }
+  ]
 }
 
 function sidebar(locale: 'root' | 'en'): DefaultTheme.Sidebar {
   const prefix = locale === 'root' ? '/' : '/en/'
-  const hooks = [['onRequest', 'onrequest'], ['onResponse', 'onresponse']]
-  const items = pages.map((page) => ({
-    text: labels[locale][page], link: `${prefix}${page}`,
-    ...(page === 'api' ? { items: hooks.map(([text, anchor]) => ({ text, link: `${prefix}api#${anchor}` })) } : {})
-  }))
-  return [{ text: locale === 'root' ? 'ドキュメント' : 'Documentation', items }]
+  const ja = locale === 'root'
+  const page = (name: keyof typeof labels.root): DefaultTheme.SidebarItem => ({ text: labels[locale][name], link: `${prefix}${name}` })
+  const referenceLink = (text: string, anchor: string): DefaultTheme.SidebarItem => ({ text, link: `${prefix}api#${encodeURIComponent(anchor)}` })
+  const hooks = [
+    ['request.onEnter', 'request-onenter'],
+    ['request.onLeave', 'request-onleave'],
+    ['response.onEnter', 'response-onenter'],
+    ['response.onLeave', 'response-onleave']
+  ]
+  const guide: DefaultTheme.SidebarItem[] = [
+    { text: ja ? '導入' : 'Introduction', items: [page('what-is-interceptor'), page('getting-started')] },
+    { text: ja ? 'プラグイン' : 'Plugins', items: [page('authoring'), page('examples')] },
+    { text: ja ? '開発と公開' : 'Development and publishing', items: [page('devcontainer'), page('publishing')] },
+    { items: [{ text: ja ? 'APIリファレンス' : 'API reference', link: `${prefix}api` }] }
+  ]
+  const reference: DefaultTheme.SidebarItem[] = [
+    { text: ja ? 'リファレンス' : 'Reference', items: [
+      { text: ja ? '概要' : 'Overview', link: `${prefix}api` },
+      referenceLink('Interceptor.attach', 'interceptor-attach'),
+      referenceLink(ja ? '対象条件' : 'Matching', ja ? '対象条件' : 'matching')
+    ] },
+    { text: 'Hook', items: hooks.map(([text, anchor]) => referenceLink(text, anchor)) },
+    { text: ja ? '設定と制限' : 'Configuration and limits', items: [
+      referenceLink(ja ? 'manifestと権限' : 'Manifest and permissions', ja ? 'manifestと権限' : 'manifest-and-permissions'),
+      referenceLink(ja ? '実行条件と制限' : 'Execution and limits', ja ? '実行条件と制限' : 'execution-and-limits'),
+      referenceLink(ja ? '型宣言' : 'Types', ja ? '型宣言' : 'types')
+    ] },
+    { items: [{ text: ja ? 'ガイド' : 'Guide', link: `${prefix}what-is-interceptor` }] }
+  ]
+  // Flat routes have equal depth; keep the specific API prefix before the guide fallback.
+  return { [`${prefix}api`]: reference, [prefix]: guide }
 }
 
 const searchTranslations = {
@@ -69,7 +99,8 @@ export default defineConfig({
   cleanUrls: false,
   lastUpdated: false,
   srcExclude: ['**/node_modules/**'],
-  title: context.name,
+  title: siteTitle,
+  head: [['link', { rel: 'icon', type: 'image/png', href: `${context.base}images/interceptor.png` }]],
   // Keep repository-controlled metadata in an external JS asset, never an inline script.
   metaChunk: true,
   markdown: {
@@ -77,12 +108,13 @@ export default defineConfig({
   },
   transformPageData(pageData) {
     const text = textsFor(pageData.relativePath)
-    pageData.frontmatter = substituteFrontmatter(pageData.frontmatter, context, text) as typeof pageData.frontmatter
+    pageData.frontmatter = substituteFrontmatter(pageData.frontmatter, { ...context, name: siteTitle }, text) as typeof pageData.frontmatter
     const values = plainValues(context, text)
     if (pageData.title) pageData.title = substitute(pageData.title, values)
     if (pageData.description) pageData.description = substitute(pageData.description, values)
   },
   themeConfig: {
+    logo: { src: '/images/interceptor.png', alt: '' },
     search: {
       provider: 'local',
       options: {
@@ -130,6 +162,7 @@ export default defineConfig({
     }
   },
   vite: {
+    plugins: [tailwindcss()],
     server: { fs: { allow: [fileURLToPath(new URL('../..', import.meta.url))] } }
   }
 })

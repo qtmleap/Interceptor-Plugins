@@ -1,0 +1,12 @@
+{
+  "generator": "SVG renderer (Bun)",
+  "inputs": {
+    "tools/render-hook-diagrams.ts": "114e29af531e92ea8439580a00c8a3769c0363806b7d620f7e6b27573357df97"
+  },
+  "outputs": {
+    "website/public/diagrams/plugin-hooks-ja-light.svg": "f3e83a3ecd3ec9d6fac2b33bd43fa0ad381c6215b8b923777a2a81c54c819188",
+    "website/public/diagrams/plugin-hooks-ja-dark.svg": "323e1fca9dd04098a18b10106bbf6df4345d942b4fdeb4582b6f1c788f75c3c8",
+    "website/public/diagrams/plugin-hooks-en-light.svg": "2794865782fe423f059dfc59a20741d63f1fb6002ca6d283abc57332dc61524a",
+    "website/public/diagrams/plugin-hooks-en-dark.svg": "8caa5911e32f4672df7e021bd256e1ee2f7a8b687a7d8734a3e97c7eae5a53e1"
+  }
+}

@@ -3,9 +3,15 @@ title: Getting started
 lang: en-US
 ---
 
+<script setup>
+import HookFlow from '../.vitepress/components/HookFlow.vue'
+</script>
+
 # Getting started
 
-You need **Interceptor 1.1.0 or later** with the Plugins preview. A plugin is a script that processes supplied traffic information. The current preview lets you run the samples with test data and inspect the result; it does not send or receive live traffic.
+An Interceptor build supporting schema 2 and live HTTP hooks is being prepared for distribution. Its version and download location will be announced when published. For now, use the Rust simulator's synthetic tests on Linux or macOS, as described in [Authoring](authoring.md).
+
+The app steps below apply after that build is published. Importing a plugin does not apply it to live traffic. Run synthetic tests while it is disabled, then separately approve the revision for live use.
 
 ## Add the repository
 
@@ -17,7 +23,7 @@ Open **Settings → Plugins → + → Add Repository** and enter:
 %%REPOSITORY_URL%%
 ```
 
-Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect its source and manifest.
+Before adding it, preview the repository name and script count. Signed repositories also show the signing-key fingerprint. After adding the repository, open each script's details to inspect all its source files and the manifest, which declares targets, permissions and other plugin metadata.
 
 ## Verifying trust
 
@@ -41,27 +47,37 @@ The value on this page alone does not complete verification. This site and feed 
 
 ## Import and test
 
-The test shows what a script returns for the supplied input. It sends nothing to external servers.
+Synthetic tests execute input JSON without sending live traffic or webhooks.
 
-1. Choose a package from the list and inspect its source.
-2. Select **Import Disabled** to store it without enabling it.
-3. Open the imported script, choose its hook, and select **Run Synthetic Test** to run the test data.
+1. Select a package and inspect all its source files and manifest.
+2. Import it disabled.
+3. Open the script and select a hook. Enter JSON containing traffic metadata as well as the HTTP body, then run the synthetic test.
 
-| Sample | Hook | Default displayed JSON payload |
-|---|---|---|
-| Request summary | Request | `{"summary":"GET example.com/synthetic"}` |
-| Server error filter | Response | `{"host":"example.com","status":503}` |
+For [Request summary](examples.md#request-summary), select `request.onEnter` and paste the full event below into the input JSON field.
 
-For the no-action case, change the response status in the test input to `200`. A request-only script does not define `onResponse`, and vice versa, so choose the hook that matches the script.
+<<< ../../fixtures/request-event.json{json}
 
-## What the preview does
+The body preview should show `{"query":"x","limit":5}`. Changing the host to `other.example.com` produces no mutation because it does not match.
 
-This is a synchronous v1 **synthetic preview**. It runs explicit input and displays the returned webhook intents.
+A synthetic test runs one phase. Selecting a leave phase does not send traffic; supply the data that would be visible after forwarding.
 
-- At most two intents are returned.
-- Nothing is **delivered** to a webhook.
-- It does not attach to live capture.
-- It does not run in the background.
-- Imports are stored disabled. The samples request no body, header or query values.
+To change the source code, edit `plugins/NAME/hooks/` in your development environment, rebuild with `bun run build:dev` and reimport the generated package.
 
-If the result matches the table, you have checked the sample's result with test data. This is the extent of the current preview; there is no step to enable automatic execution on live traffic. See [Examples](examples.md) to try another sample. To create your own plugin, continue with [TypeScript authoring](authoring.md).
+## Use on live traffic
+
+After the compatible build is published, follow these steps for a schema 2 script. `api.example.com` is an illustrative host; use a plugin targeting an API you can access for a live test.
+
+<HookFlow locale="en" />
+
+1. Open **Settings → Capture Setup** and follow the certificate and VPN setup steps. Trusting the certificate lets Interceptor decrypt HTTPS for selected hosts.
+2. Open **Settings → SSL Proxying List** and add the host shown in the script’s target conditions.
+3. In **Settings → Plugins**, open the script and inspect its source, targets and grants. Choose **Use on live traffic → Approve for Live Traffic…**, then select **OK**. A revision is the exact package containing all source files and the manifest shown.
+4. Return to **Settings**, turn on **Status**, generate matching traffic and open the host's traffic from **Home** to inspect the forwarded JSON.
+
+Approval lets the script read its declared traffic data and, when permitted, change JSON sent to a server or returned to a client.
+
+Adding or revoking approval, or deleting a schema 2 script, ends the current capture connection. Changes apply on the user's next explicit connection. Decryption-host and certificate-trust configuration is still required. Approving a plugin does not add decryption targets.
+
+Importing does not enable a revision. New or updated content needs fresh approval. Revoke approval or delete the script when no longer needed; revocation also ends an active connection.
+
+Live JSON hooks have [format and size limits](api.md#execution-and-limits). External webhook delivery and manual execution from Shortcuts are not supported.

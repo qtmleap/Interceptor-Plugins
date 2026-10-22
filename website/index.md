@@ -4,46 +4,53 @@ lang: ja
 layout: home
 hero:
   name: "%%REPOSITORY_NAME%%"
-  text: プラグインを試す・作る・公開する
-  tagline: Interceptor Pluginではテスト用の通信データを使ってJavaScriptの処理を試せます。作成した処理は署名付きパッケージとして配布できます。
+  text: '<span lang="en">Frida-like hooks for HTTP traffic</span>'
+  tagline: リクエストやレスポンスのJSONを書き換え、通信に合わせて独自のJavaScriptを実行できます。
+  image:
+    src: /images/interceptor.png
+    alt: Interceptor
   actions:
     - theme: brand
-      text: テストデータで試す
-      link: /getting-started
-    - theme: alt
       text: プラグインを書く
       link: /authoring
     - theme: alt
-      text: 自分のリポジトリを公開する
-      link: /publishing
+      text: Interceptorとは
+      link: /what-is-interceptor
 features:
-  - title: 合成データでプレビュー
-    details: テスト用の通信データでスクリプトを実行し、Webhookへの送信要求を最大2件表示します。実際の送信や、実通信を対象とした処理は行いません。同期実行に対応したv1のプレビューです。
+  - icon:
+      src: /icons/filter.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: 条件に合う通信を処理
+    details: ファイルの配置でホスト・パス・メソッドを指定できます。条件に一致した通信だけがHookに渡されるため、JavaScriptに同じ条件判定を書く必要はありません。
     link: /api
-  - title: TypeScriptで開発
-    details: src/*.ts とmanifestを編集してビルドすると、型チェックとJavaScriptへの変換を経て、読みやすいソースを含むパッケージが生成されます。
+  - icon:
+      src: /icons/json.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: JSONを直接変更
+    details: リクエストやレスポンスのJSON本文を、JavaScriptで直接読み書きできます。実際に送るデータの値を差し替えたり、フィールドを追加したりできます。
     link: /authoring
-  - title: 署名と信頼
-    details: パッケージのハッシュと一覧の署名を検証します。公開鍵の指紋は信頼できる別の経路で照合します。
-    link: /getting-started#信頼の確認
-  - title: テンプレートから公開
-    details: clone後、セットアップで署名鍵・GitHubのSecret・Pagesを設定します。masterへのpush後は、CIが署名して公開します。
+  - icon:
+      src: /icons/check.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: テストデータで確認
+    details: テスト用のリクエストやレスポンスで、JSONの変更や条件判定を確認できます。実際の通信に適用する前に、プラグインの動作を試せます。
+    link: /authoring
+  - icon:
+      src: /icons/package.svg
+      alt: ""
+      wrap: true
+      width: 24
+      height: 24
+    title: 署名して配布
+    details: 作成したプラグインに署名し、リポジトリで配布できます。利用者はInterceptorにリポジトリのURLを登録し、一覧から必要なプラグインを選んで読み込めます。
     link: /publishing
 ---
-
-## Interceptor Pluginとは
-
-Interceptorはアプリとサーバーの間のネットワーク通信を確認するためのアプリです。Interceptor Pluginは、JavaScriptで書いた独自の処理を追加する機能です。作者は処理のソースと、プラグイン名・バージョン・対象条件などを記載したmanifestをパッケージにまとめて配布します。このリポジトリではTypeScriptでソースを書き、JavaScriptに変換してパッケージを作ります。
-
-現在はプラグインを読み込み、テスト用に用意した合成データで動作を確認できます。結果として返されたWebhookへの送信要求は画面に表示されるだけで、実際には送信されません。実際の通信をきっかけに処理を自動実行する機能や、通信内容を変更する機能は未実装です。[現在のAPI](api.md#onrequest)と[合成プレビューのサンプル](examples.md#request-summary)から試せます。
-
-## 作成と公開
-
-このサイトは **%%REPOSITORY_NAME%%** の利用者・作者向けガイドです。リポジトリのURLは `%%REPOSITORY_URL%%` です。
-
-- [はじめに](getting-started.md): リポジトリの追加、読み込み、テスト
-- [TypeScriptの書き方](authoring.md): ビルド、テスト、バージョン更新
-- [APIリファレンス](api.md): manifestのフィールド、フック、権限、バインディング
-- [サンプル](examples.md): 実際のソースとmanifest
-- [公開](publishing.md): 自分のリポジトリを作って配布する
-- [開発コンテナ](devcontainer.md): Linuxでの開発と公開

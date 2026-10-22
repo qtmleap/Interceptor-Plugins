@@ -19,6 +19,7 @@ if python3 -c 'import json,sys; sys.exit(json.load(open("repository-config.json"
     python3 tools/guard.py --root "$TASK_ROOT" --repository "$TASK_REPOSITORY" --ref refs/heads/master
 fi
 "$TASK_VERIFIER" samples "$TASK_ROOT" "$TASK_TEMP/site"
+"$TASK_VERIFIER" legacy-samples "$TASK_ROOT"
 python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERIFIER" --publisher "$TASK_PUBLISHER"
 "$TASK_PUBLISHER" publish "$TASK_TEMP/site" --id "$TASK_REPO_ID" --name "$TASK_REPO_NAME" --sequence 1
 "$TASK_VERIFIER" verify-local "$TASK_ROOT" "$TASK_TEMP/site"
@@ -26,16 +27,30 @@ python3 tools/tests/check_template.py --root "$TASK_ROOT" --verifier "$TASK_VERI
 # A known wrong event shape must fail the expected-output checks, not silently yield undefined text.
 cp -R "$TASK_TEMP/repro" "$TASK_TEMP/wrong-shape"
 mkdir -p "$TASK_TEMP/wrong-root"
-cp -R manifests fixtures "$TASK_TEMP/wrong-root/"
-cp -R build/scripts "$TASK_TEMP/wrong-root/scripts"
+cp -R fixtures "$TASK_TEMP/wrong-root/"
+for TASK_SOURCE_FOLDER in plugins manifests src scripts; do
+    if [[ -d "$TASK_SOURCE_FOLDER" ]]; then cp -R "$TASK_SOURCE_FOLDER" "$TASK_TEMP/wrong-root/"; fi
+done
+mkdir -p "$TASK_TEMP/wrong-root/build"
+cp -R build/scripts "$TASK_TEMP/wrong-root/build/scripts"
 cp repository-config.json "$TASK_TEMP/wrong-root/"
-python3 - "$TASK_TEMP/wrong-shape/plugins/request-summary.json" "$TASK_TEMP/wrong-root/scripts/request-summary.js" <<'PY'
+python3 - "$TASK_TEMP/wrong-shape/plugins/request-summary.json" "$TASK_TEMP/wrong-root/build/scripts/request-summary" <<'PY'
 import json, sys
 from pathlib import Path
 p = Path(sys.argv[1]); package = json.loads(p.read_text())
-package['source'] = "function onRequest(event, config) { return {actions:[{type:'webhook',endpointId:config.endpoints.preview,json:{summary:event.method+' '+event.host+event.path}}]}; }"
+selected = package['manifest']['matches'][0]['hooks']['request']['onEnter']
+callbacks = {}
+for route in package['manifest']['matches']:
+    for leg, phases in route['hooks'].items():
+        for phase, source_file in phases.items():
+            if source_file == selected:
+                body = 'event.request.body.limit=5;' if (leg, phase) == ('request', 'onEnter') else ''
+                callbacks.setdefault(leg, {})[phase] = phase + '(event){' + body + '}'
+source = 'Interceptor.attach({' + ','.join(leg + ':{' + ','.join(phases.values()) + '}' for leg, phases in callbacks.items()) + '});'
+package['sourceFiles'][selected] = source
 p.write_text(json.dumps(package))
-Path(sys.argv[2]).write_text(package['source'])
+script = Path(sys.argv[2]) / selected
+script.write_text(source)
 PY
 if "$TASK_VERIFIER" samples "$TASK_TEMP/wrong-root" "$TASK_TEMP/wrong-shape" > build/evidence/wrong-shape.log 2>&1; then
     echo 'wrong event shape unexpectedly passed' >&2; exit 1
@@ -44,7 +59,9 @@ grep -q 'sample cases failed' build/evidence/wrong-shape.log
 
 # Tests use a temporary config and key, never the official secret or committed fingerprint.
 mkdir -p "$TASK_TEMP/root"
-cp -R manifests "$TASK_TEMP/root/"
+for TASK_SOURCE_FOLDER in plugins manifests src scripts; do
+    if [[ -d "$TASK_SOURCE_FOLDER" ]]; then cp -R "$TASK_SOURCE_FOLDER" "$TASK_TEMP/root/"; fi
+done
 TASK_TEST_FP=$("$TASK_PUBLISHER" keygen "$TASK_TEMP/test.key")
 python3 - "$TASK_TEMP/root/repository-config.json" "$TASK_TEST_FP" <<'PY'
 import json, sys
