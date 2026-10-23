@@ -1,6 +1,7 @@
 """Ordinary installed package resolution without a package-specific compiler policy."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -9,7 +10,7 @@ import test_compiler_fetch as fixtures
 
 
 class BundlingTests(Case):
-    def compile(self, imports, expression, packages, name='output', env=None):
+    def compile(self, imports, expression, packages, name='output', env=None, copy_typescript=False):
         root = fixtures.CompilerFetchTests.routed_root(self)
         (root / 'package.json').write_text((REPO / 'package.json').read_text())
         (root / 'node_modules').unlink()
@@ -20,6 +21,8 @@ class BundlingTests(Case):
                 scope.mkdir()
                 for member in child.iterdir():
                     (scope / member.name).symlink_to(member, target_is_directory=True)
+            elif child.name == 'typescript' and copy_typescript:
+                shutil.copytree(child, root / 'node_modules' / child.name)
             elif not child.name.startswith('.'):
                 (root / 'node_modules' / child.name).symlink_to(child, target_is_directory=True)
         for package, files in packages.items():
@@ -203,6 +206,21 @@ class BundlingTests(Case):
         result, output = self.compile("import {value} from 'fixture-lib';", 'sneaky + value()', {'fixture-lib': package})
         self.fails(result)
         self.assertIn('global', result.stderr)
+        self.assertFalse(output.exists())
+
+    def test_standard_library_globals_work_with_a_non_symlinked_typescript_install(self):
+        package = self.package("export function value(){return 'ok';}")
+        result, output = self.compile("import {value} from 'fixture-lib';", "JSON.stringify(Object.keys({a: value()}))",
+                                      {'fixture-lib': package}, copy_typescript=True)
+        self.ok(result)
+        self.assertEqual(self.fetch_result(output), '["a"]')
+
+    def test_dom_library_globals_remain_unavailable(self):
+        package = self.package("export function value(){return 'x';}",
+                               '/// <reference lib="dom" />\nexport function value(): string;')
+        result, output = self.compile("import {value} from 'fixture-lib';", 'document.title + value()', {'fixture-lib': package})
+        self.fails(result)
+        self.assertIn('dependency-only global', result.stderr)
         self.assertFalse(output.exists())
 
     def test_unsupported_runtime_dependencies_fail_without_output(self):

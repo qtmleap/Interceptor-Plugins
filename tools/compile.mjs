@@ -429,8 +429,10 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
       const symbol = ts.isShorthandPropertyAssignment(node.parent)
         ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
       if (hasImports && !isPropertyName(node) && symbol?.declarations?.length
-          && symbol.declarations.every(declaration => isDependency(declaration.getSourceFile().fileName)
-            || /lib\.(?:dom|webworker)/.test(declaration.getSourceFile().fileName))) {
+          && symbol.declarations.every(declaration =>
+            /lib\.(?:dom|webworker)/.test(declaration.getSourceFile().fileName)
+            || (isDependency(declaration.getSourceFile().fileName)
+              && !program.isSourceFileDefaultLibrary(declaration.getSourceFile())))) {
         throw new Error(`${file}: ${node.text} is a dependency-only global, not an Interceptor runtime API`);
       }
       const typeUse = ts.isTypeReferenceNode(node.parent) && node.parent.typeName === node;
