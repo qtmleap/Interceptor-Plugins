@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
 const root = path.resolve(process.argv[2] || '.');
-// Promise is allowed only as a type inside response.onLeave callbacks.
+// Promise (as a type) and Uint8Array (createFile contents) are allowed only inside response.onLeave callbacks.
 const forbidden = new Set(['Promise', 'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Atomics',
   'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array',
   'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array']);
@@ -26,22 +26,28 @@ const isAttach = node => ts.isCallExpression(node) && ts.isPropertyAccessExpress
 const isSend = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
   && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
   && node.expression.name.text === 'send';
-// Any `Interceptor.saveJSON` property access, whether or not it is a direct call.
-const isSaveAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
-  && node.expression.text === 'Interceptor' && node.name.text === 'saveJSON';
+// Any `Interceptor.createFile` property access, whether or not it is a direct call.
+const isCreateAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+  && node.expression.text === 'Interceptor' && node.name.text === 'createFile';
+// Any `Interceptor.Storage` value access; only `Interceptor.Storage.<case>` is accepted.
+const isStorageAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+  && node.expression.text === 'Interceptor' && node.name.text === 'Storage';
+const STORAGE_CASES = ['local', 'iCloudDrive'];
 
 function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
   const sends = [];
   const saves = [];
+  const storages = [];
   const references = [];
   const walk = (node, parent) => {
     if (isAttach(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) calls.push(node);
     if (isSend(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) sends.push(node);
-    if (isSaveAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) saves.push({ access: node, parent });
+    if (isCreateAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) saves.push({ access: node, parent });
+    if (isStorageAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) storages.push({ access: node, parent });
     if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
         && ts.isIdentifier(node.expression) && node.expression.text === 'Interceptor'
-        && (ts.isElementAccessExpression(node) || ['attach', 'send', 'saveJSON'].includes(node.name.text))
+        && (ts.isElementAccessExpression(node) || ['attach', 'send', 'createFile', 'Storage'].includes(node.name.text))
         && checker.getSymbolAtLocation(node.expression) !== namespace) {
       throw new Error(`${source.fileName}: Interceptor host calls cannot use a shadowed name`);
     }
@@ -59,7 +65,7 @@ function staticHooks(source, checker, namespace, globalObject) {
   }
   const call = calls[0];
   const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression),
-    ...saves.map(save => save.access.expression)]);
+    ...saves.map(save => save.access.expression), ...storages.map(storage => storage.access.expression)]);
   if (references.some(node => !directReferences.has(node))) {
     throw new Error(`${source.fileName}: Interceptor host calls cannot be aliased or called indirectly`);
   }
@@ -103,11 +109,17 @@ function staticHooks(source, checker, namespace, globalObject) {
       throw new Error(`${source.fileName}: Interceptor.send is available only inside a registered callback`);
     }
   }
-  // saveJSON must be a direct call to the property inside a registered response.onLeave callback.
+  // createFile must be a direct call to the property inside a registered response.onLeave callback.
   for (const { access, parent } of saves) {
     if (!ts.isCallExpression(parent) || parent.expression !== access
         || !leaveRegions.some(region => access.pos >= region.pos && access.end <= region.end)) {
-      throw new Error(`${source.fileName}: Interceptor.saveJSON must be called directly inside a registered response.onLeave callback`);
+      throw new Error(`${source.fileName}: Interceptor.createFile must be called directly inside a registered response.onLeave callback`);
+    }
+  }
+  // Storage is read only as Interceptor.Storage.<case>, never copied, destructured or aliased.
+  for (const { access, parent } of storages) {
+    if (!ts.isPropertyAccessExpression(parent) || parent.expression !== access || !STORAGE_CASES.includes(parent.name.text)) {
+      throw new Error(`${source.fileName}: use Interceptor.Storage only as Interceptor.Storage.local or Interceptor.Storage.iCloudDrive`);
     }
   }
   return { hooks, leaveRegions, usesFiles: saves.length > 0 };
@@ -183,7 +195,8 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     }
     if (ts.isIdentifier(node)) {
       const typeUse = ts.isTypeReferenceNode(node.parent) && node.parent.typeName === node;
-      if (forbidden.has(node.text) && !(node.text === 'Promise' && typeUse && inLeave(node))) {
+      const allowedHere = inLeave(node) && ((node.text === 'Promise' && typeUse) || node.text === 'Uint8Array');
+      if (forbidden.has(node.text) && !allowedHere) {
         throw new Error(`${file}: ${node.text} is unavailable in this host`);
       }
       if (node.text === 'fetch' && !ts.isTypeReferenceNode(node.parent)) {
@@ -242,7 +255,7 @@ try {
       const matches = plugin.routes.map(route => {
         const result = compile(path.join(root, 'plugins', name, route.file), sdk, [], true);
         if (result.usesFiles && plugin.metadata.write?.files !== true) {
-          throw new Error(`plugins/${name}/${route.file}: Interceptor.saveJSON requires write.files: true in plugin.json`);
+          throw new Error(`plugins/${name}/${route.file}: Interceptor.createFile requires write.files: true in plugin.json`);
         }
         sourceFiles[route.emitted] = result.code;
         const hooks = Object.fromEntries(Object.entries(result.hooks).map(([leg, callbacks]) =>

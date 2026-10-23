@@ -43,7 +43,7 @@ class SalmonQuickJSTests(unittest.TestCase):
                 # The native bridge still checks permissions, JSON and invocation budgets.
                 if status == 200:
                     planned_saves += 1
-                    packets += b'SAVE_ERROR\n' if planned_saves == save_fail_at else b'SAVED\n'
+                    packets += b'CREATE_ERROR\n' if planned_saves == save_fail_at else b'CREATED\n'
         with tempfile.TemporaryDirectory(prefix='splatnet3-quickjs-') as directory:
             event_path, config_path = Path(directory) / 'event.json', Path(directory) / 'config.json'
             event_path.write_text(json.dumps(event))
@@ -56,16 +56,17 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.saves = []
         while line := stream.readline():
             fields = line.decode().strip().split()
-            self.assertIn(fields[0], ['FETCH', 'SAVE', 'RESULT'], proc.stdout.decode(errors='replace') + proc.stderr.decode())
-            count = int(fields[1])
-            if fields[0] == 'SAVE':
-                key = stream.read(count).decode()
-                self.assertEqual(stream.read(1), b'\n')
-                text = stream.read(int(fields[2])).decode()
-                self.assertEqual(stream.read(1), b'\n')
-                self.assertTrue(0 < int(fields[3]) <= 10000)
-                self.saves.append((key, text))
+            self.assertIn(fields[0], ['FETCH', 'CREATEFILE', 'RESULT'], proc.stdout.decode(errors='replace') + proc.stderr.decode())
+            if fields[0] == 'CREATEFILE':
+                parts = []
+                for count in fields[1:4]:
+                    parts.append(stream.read(int(count)))
+                    self.assertEqual(stream.read(1), b'\n')
+                storage, path, contents = parts
+                self.assertTrue(0 < int(fields[4]) <= 10000)
+                self.saves.append((storage.decode(), path.decode(), contents))
                 continue
+            count = int(fields[1])
             value = json.loads(stream.read(count))
             self.assertEqual(stream.read(1), b'\n')
             if fields[0] == 'FETCH':
@@ -127,12 +128,14 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         self.assertIsNone(result)
 
-    def test_original_response_texts_reach_the_native_save_callback(self):
+    def test_original_response_texts_reach_the_native_create_file_callback(self):
         history = ' {"data": ' + json.dumps(fx.history(['d1'])['data']) + '} \n'
         detail = ' {"data": ' + json.dumps(fx.detail('d1')['data']) + '} \n'
         proc, _, result = self.execute([(200, history), (200, detail)])
         self.assertEqual(proc.returncode, 0, proc.stderr.decode())
-        self.assertEqual([text for _, text in self.saves], [history, detail])
+        self.assertEqual([contents.decode() for _, _, contents in self.saves], [history, detail])
+        self.assertEqual([(storage, path) for storage, path, _ in self.saves],
+                         [('icloud', 'Salmon Run/history.json'), ('icloud', fx.detail_path('d1'))])
         self.assertEqual(result['actions'][0]['json']['acquired'], ['d1'])
 
     def test_save_failure_stops_later_work_in_the_real_bridge(self):

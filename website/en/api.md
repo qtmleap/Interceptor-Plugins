@@ -159,13 +159,24 @@ limits also apply. Revocation or tunnel shutdown cancels pending work.
 The existing synthetic-test screen sends no network traffic; use the offline
 `interceptor-simulator run-package-fetch` fixture protocol for response tests.
 
-## Interceptor.saveJSON {#save-json}
+## Interceptor.createFile {#create-file}
 
-`await Interceptor.saveJSON(key, jsonText)` stores the JSON text `jsonText` under `key` in the plugin's own
-file storage and returns `Promise<void>`. It requires `write.files: true` in the manifest (optional, default
-`false`; schema 1 rejects it). Call it directly, not aliased or through `globalThis`, inside a
-`response.onLeave` callback and await it. The build accepts only direct calls. A failed write rejects the
-promise; runtime enforcement remains the host's responsibility.
+`await Interceptor.createFile({ storage, atPath, contents })` creates a file at `atPath` in the plugin's own
+`storage` and returns `Promise<void>`. `storage` is `Interceptor.Storage.local` (`'local'`) or
+`Interceptor.Storage.iCloudDrive` (`'icloud'`); a raw string literal is a type error. `atPath` is a relative path
+from that storage's virtual root (for example `'Salmon Run/history.json'`). `contents` is a string (written as UTF-8) or a
+`Uint8Array` (written byte for byte) and may be empty. `Uint8Array` is available only inside `response.onLeave`;
+other typed arrays, `ArrayBuffer`, `SharedArrayBuffer`, `DataView` and `Atomics` stay unavailable.
+It requires `write.files: true` in the manifest (optional, default `false`; schema 1 rejects it). Call it
+directly, not aliased or through `globalThis`, inside a `response.onLeave` callback and await it, and read
+storage cases directly as `Interceptor.Storage.iCloudDrive`. The build accepts only direct calls. A failed write
+rejects the promise; runtime enforcement remains the host's responsibility.
+The Promise resolves after a durable private commit. Interceptor exports files while foreground; iCloud Drive
+needs a user-authorized folder. The Promise does not wait for Apple's server upload. Contents are preserved
+as supplied; this API does not parse JSON.
+When the folder picker grants `iCloud Drive/Salmon Run`, keep the JS path `Salmon Run/history.json`.
+Interceptor maps that grant to the exact `Salmon Run/` prefix and removes it once when publishing, so
+`history.json` appears directly inside the selected folder, without another nested `Salmon Run` directory.
 
 ## Interceptor.send {#interceptor-send}
 
@@ -216,7 +227,7 @@ Keep the plugin UUID `id` after publication and increment `version` for changes.
 - `queryKeys`: readable query keys.
 - `body.mode`: `none` omits the body; `json` exposes parsed JSON.
 
-`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Optional `write.files` (default `false`) allows `Interceptor.saveJSON`. Method, URL, headers and status cannot be changed.
+`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Optional `write.files` (default `false`) allows `Interceptor.createFile`. Method, URL, headers and status cannot be changed.
 
 `endpointBindings` is required and lists names used to construct webhook-shaped actions in synthetic tests; use `[]` when no names are needed. Synthetic tests may supply a test ID through `cfg.endpoints.preview`. Live processing supplies no endpoint IDs, so the examples return without an action when the ID is absent. Matching already checks the host and method. Settings are available as `cfg.settings`.
 

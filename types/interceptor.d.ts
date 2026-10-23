@@ -94,12 +94,26 @@ declare namespace Interceptor {
     text(): Promise<string>;
     json(): Promise<any>;
   }
+  /** Where `createFile` writes. Use the members directly (`Interceptor.Storage.iCloudDrive`); raw strings do not type-check. */
+  enum Storage {
+    local = 'local',
+    iCloudDrive = 'icloud',
+  }
+  interface CreateFileOptions {
+    storage: Storage;
+    /** Relative path inside the chosen storage, e.g. `'Salmon Run/history.json'`. */
+    atPath: string;
+    /** Text is written as UTF-8; a `Uint8Array` is written byte for byte. Empty contents are allowed. */
+    contents: string | Uint8Array;
+  }
   /**
-   * Stores `jsonText` (valid JSON text) under `key` in the plugin's own files. Requires `write.files: true`.
+   * Durably stages original bytes for `storage` at the storage-relative `atPath`. Requires `write.files: true`.
+   * Resolves after the private record commits. Interceptor exports while foreground; iCloud delivery requires a
+   * user-authorized folder, and this Promise does not wait for Apple's server upload. JSON is not parsed here.
    * Call it directly (not aliased or via `globalThis`) inside a registered `response.onLeave` callback and await it;
    * a failure rejects. The compiler checks direct references; runtime enforcement remains the host's responsibility.
    */
-  function saveJSON(key: string, jsonText: string): Promise<void>;
+  function createFile(options: CreateFileOptions): Promise<void>;
   /** Registers this file's handlers. The build derives targets from its path. */
   function attach(hooks: Hooks): void;
 }

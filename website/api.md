@@ -176,12 +176,17 @@ Interceptor.attach({
 既存の合成テスト画面はネットワークを実行しません。オフラインの応答を使う検証には
 `interceptor-simulator run-package-fetch`を使います。
 
-## Interceptor.saveJSON {#save-json}
+## Interceptor.createFile {#create-file}
 
-`await Interceptor.saveJSON(key, jsonText)`は、JSON文字列`jsonText`をキー`key`でPlugin専用の保存領域へ書き込みます（`Promise<void>`）。
+`await Interceptor.createFile({ storage, atPath, contents })`は、Plugin専用の保存先`storage`の`atPath`にファイルを作成します（`Promise<void>`）。
+`storage`は`Interceptor.Storage.local`（`'local'`）または`Interceptor.Storage.iCloudDrive`（`'icloud'`）で、文字列リテラルは型エラーになります。
+`atPath`は`storage`の仮想ルートからの相対パス（例：`'Salmon Run/history.json'`）、`contents`は文字列（UTF-8）または`Uint8Array`（バイト列のまま）で、空でも構いません。
+`Uint8Array`は`response.onLeave`内でのみ使えます。他の`ArrayBuffer`、`SharedArrayBuffer`、`DataView`、`Atomics`と他の型付き配列は使えません。
 manifestの`write.files`を`true`にした場合だけ使えます（省略時は`false`。スキーマ1では指定できません）。
-`response.onLeave`コールバック内で、別名や`globalThis`を経由せず直接呼び、必ず`await`してください。ビルドは直接呼び出しだけを受け付けます。
+`response.onLeave`コールバック内で、別名や`globalThis`を経由せず直接呼び、必ず`await`してください。`Interceptor.Storage`は`Interceptor.Storage.iCloudDrive`のように直接参照します。ビルドは直接呼び出しだけを受け付けます。
 書き込みに失敗するとPromiseは拒否されます。実行時の検証はホストの責任です。
+Promiseの解決は本体内への永続保存の完了を意味します。Interceptorを開いている間に保存先へ書き出し、iCloud Driveには初回のフォルダアクセス許可が必要です。OSによるiCloudへのアップロード完了は、このPromiseでは待ちません。JSONの解析は行わず、元の内容を保存します。
+フォルダ選択画面でiCloud Drive内の「Salmon Run」を許可した場合も、JSの`atPath`は`Salmon Run/history.json`のままです。本体が許可したフォルダに対応する`Salmon Run/`を一度だけ取り除き、そのフォルダ直下に`history.json`を書き出します。`Salmon Run/Salmon Run/`にはなりません。
 
 ## Interceptor.send {#interceptor-send}
 
@@ -232,7 +237,7 @@ Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 - `queryKeys`: 読み取るクエリキー
 - `body.mode`: `none`は本文を渡さず、`json`はJSON本文を渡す
 
-`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。`write.files`（省略可、既定`false`）は`Interceptor.saveJSON`の利用権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
+`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。`write.files`（省略可、既定`false`）は`Interceptor.createFile`の利用権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
 
 `endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`cfg.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`cfg.settings`で参照します。
 

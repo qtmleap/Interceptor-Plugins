@@ -11,13 +11,15 @@ const code = input.source.endsWith('.ts')
 let hooks: any
 const requests: any[] = []
 const replies = input.replies ?? []
-const saves: { key: string; json: string; failed?: boolean }[] = []
+const saves: { storage: string; path: string; contents: string; failed?: boolean }[] = []
 const context = vm.createContext({
   Interceptor: {
     attach(value: any) { hooks = value },
-    async saveJSON(key: string, json: string) {
+    Storage: { local: 'local', iCloudDrive: 'icloud' },
+    async createFile(options: { storage: string; atPath: string; contents: string | Uint8Array }) {
       const failed = input.saveFailAt === saves.length + 1
-      saves.push({ key, json, ...(failed ? { failed } : {}) })
+      if (typeof options.contents !== 'string') throw new Error('unexpected-binary')
+      saves.push({ storage: options.storage, path: options.atPath, contents: options.contents, ...(failed ? { failed } : {}) })
       if (failed) throw new Error('save-failed')
     },
   },

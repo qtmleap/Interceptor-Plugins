@@ -15,7 +15,7 @@ Supported subset: public HTTPS443 GET/POST/PUT with strict JSON request bodies
 (up to8KiB), no URL query/redirect/stream/compressed response or automatic cookie.
 Response.status/ok/bodyUsed/text()/json() are available; read the body once.
 Limits:8MiB JS heap,250ms cumulative CPU for fetch-only or1000ms with a files
-grant and trusted save callback (host wait excluded),120sec wall,
+grant and trusted file callback (host wait excluded),120sec wall,
 64requests,1MiB per response and16MiB aggregate; two concurrent fetch VMs.
 
 repository-config.json pins the shared native source used by the simulator.
@@ -23,6 +23,17 @@ repository-config.json pins the shared native source used by the simulator.
 fixture protocol. Generated-Salmon-Plugin fixtures establish request order,
 JSON bodies, filtering and errors; native transport tests use an owned TLS
 origin. Those checks alone do not establish Nintendo acceptance; that needs real
-captured-token and device/service verification. M3 verification confirmed actual
-history and detail response JSON saving. Interceptor.saveJSON stores the original
-JSON text with the write.files grant; external upload remains deferred.
+captured-token and device/service verification. Previous M3 verification confirmed
+history and 50 detail response JSON files with the earlier local-save API.
+
+`Interceptor.createFile({storage, atPath, contents})` durably stages original bytes
+with the `write.files` grant. `Interceptor.Storage` supplies `local` and
+`iCloudDrive`; the latter uses a user-authorized folder mapped to a prefix of the
+virtual storage root. For `atPath: 'Salmon Run/history.json'`, selecting the actual
+`iCloud Drive/Salmon Run` folder grants prefix `Salmon Run`. The publisher strips
+that exact component prefix once and writes `history.json` directly there; it does
+not create a second Salmon Run folder. The main application exports
+while foreground, retaining private records for retry on folder/provider failure.
+Promise success means the private commit, not iCloud server upload. The simulator
+observes requests through its offline CREATEFILE/CREATED protocol and never writes
+files. Actual createFile/iCloud M3 acceptance is a separate device check.

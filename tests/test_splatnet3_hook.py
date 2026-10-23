@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import subprocess
@@ -30,6 +31,10 @@ def history(ids):
 
 def detail(id_, player='synthetic-player'):
     return {'data': {'coopHistoryDetail': {'id': id_, 'myResult': {'player': {'id': player}}}}}
+
+
+def detail_path(id_):
+    return 'Salmon Run/details/' + hashlib.sha256(id_.encode()).hexdigest() + '.json'
 
 
 def run(res=None, replies=None, settings=None, save_fail_at=None):
@@ -71,7 +76,7 @@ class SalmonHookTests(unittest.TestCase):
                            {'status': 200, 'body': first}, {'status': 200, 'body': second}])
         self.assertTrue(out['ok'], out.get('code'))
         self.assertEqual(len(out['saves']), 3)
-        self.assertEqual([json.loads(s['json']) for s in out['saves'][1:]], [first, second])
+        self.assertEqual([json.loads(s['contents']) for s in out['saves'][1:]], [first, second])
 
     def test_version_10_uses_its_own_hashes(self):
         res = response(request={'headers': {'x-web-view-ver': VERSION_10, 'accept-language': 'ja-JP'}})
@@ -180,7 +185,7 @@ def utf8(text):
 
 
 class SalmonSaveTests(unittest.TestCase):
-    """Plugin 1.1.0: Interceptor.saveJSON stores the original history text and each validated full detail."""
+    """Plugin 1.2.0: Interceptor.createFile stores the original history text and each validated full detail."""
 
     HISTORY_TEXT = ' {"data": {"coopResult": {"historyGroups": {"nodes": [\n {"historyDetails": {"nodes": [{"id": "d1"}, {"id": "d2"}]}}]}}}} \n'
 
@@ -194,27 +199,26 @@ class SalmonSaveTests(unittest.TestCase):
         d1, d2 = self.detail_text('d1'), self.detail_text('d2')
         out = run(replies=self.replies((200, d1), (200, d2)))
         self.assertTrue(out['ok'], out)
-        self.assertEqual([s['json'] for s in out['saves']], [self.HISTORY_TEXT, d1, d2])
-        keys = [s['key'] for s in out['saves']]
-        self.assertEqual(len(set(keys)), 3)
-        self.assertIn('d1', keys[1])
-        self.assertIn('d2', keys[2])
-        self.assertTrue(all(0 < utf8(k) <= 1024 for k in keys))
+        self.assertEqual([s['contents'] for s in out['saves']], [self.HISTORY_TEXT, d1, d2])
+        paths = [s['path'] for s in out['saves']]
+        self.assertEqual(paths, ['Salmon Run/history.json', detail_path('d1'), detail_path('d2')])
+        self.assertTrue(all(s['storage'] == 'icloud' for s in out['saves']))
+        self.assertEqual(len(set(paths)), 3)
 
     def test_saved_text_has_no_wrapper_or_token(self):
         out = run(replies=self.replies((200, self.detail_text('d1')), (200, self.detail_text('d2'))))
         for save in out['saves']:
-            self.assertNotIn('synthetic-token', save['json'] + save['key'])
-            self.assertNotIn('bulletToken', save['json'])
+            self.assertNotIn('synthetic-token', save['contents'] + save['path'])
+            self.assertNotIn('bulletToken', save['contents'])
         for save in out['saves'][1:]:
-            parsed = json.loads(save['json'])
+            parsed = json.loads(save['contents'])
             self.assertEqual(list(parsed), ['data'])
             self.assertEqual(list(parsed['data']), ['coopHistoryDetail'])
 
     def test_non_error_responses_without_valid_details_are_not_saved(self):
         out = run(replies=self.replies((404, {}), (200, {'data': {'coopHistoryDetail': None}})))
         self.assertTrue(out['ok'], out)
-        self.assertEqual([s['json'] for s in out['saves']], [self.HISTORY_TEXT])
+        self.assertEqual([s['contents'] for s in out['saves']], [self.HISTORY_TEXT])
 
     def test_invalid_or_error_details_are_never_saved(self):
         cases = [(detail('wrong'), 'id-mismatch'),
@@ -224,7 +228,7 @@ class SalmonSaveTests(unittest.TestCase):
             with self.subTest(code=code):
                 out = run(replies=self.replies((200, body)))
                 self.assertEqual(out['code'], code)
-                self.assertEqual([s['json'] for s in out['saves']], [self.HISTORY_TEXT])
+                self.assertEqual([s['contents'] for s in out['saves']], [self.HISTORY_TEXT])
         for status, code in [(401, 'recapture'), (500, 'http')]:
             out = run(replies=self.replies((status, 'not JSON')))
             self.assertEqual(out['code'], code)
@@ -242,16 +246,36 @@ class SalmonSaveTests(unittest.TestCase):
         out = run(res=response(status=401))
         self.assertEqual(out['saves'], [])
 
-    def test_maximum_length_result_ids_fit_in_key_limit(self):
+    def test_sha256_known_vectors_and_python_hashlib_crosscheck(self):
+        ids = ['', 'abc', 'd1', 'あ' * 170 + 'ab', 'a/b+c==', '😀' * 100, 'x' * 512, 'y' * 55, 'y' * 56, 'y' * 64]
+        out = run(replies=[{'status': 200, 'body': history(['abc'])}, {'status': 200, 'body': detail('abc')}])
+        self.assertEqual(out['saves'][1]['path'],
+                         'Salmon Run/details/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.json')
+        for id_ in ids[2:]:
+            if utf8(id_) > 512:
+                continue
+            out = run(replies=[{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}])
+            self.assertEqual(out['saves'][1]['path'], detail_path(id_))
+
+    def test_distinct_results_get_distinct_fixed_ascii_paths(self):
+        ids = ['a/b', 'a_b', 'a-b', 'A/B', 'a%2Fb', '../x', '..', 'ab/', '/ab']
+        out = run(replies=[{'status': 200, 'body': history(ids)}] + [{'status': 200, 'body': detail(i)} for i in ids])
+        self.assertTrue(out['ok'], out)
+        paths = [s['path'] for s in out['saves'][1:]]
+        self.assertEqual(paths, [detail_path(i) for i in ids])
+        self.assertEqual(len(set(paths)), len(ids))
+        for path in paths:
+            self.assertRegex(path, r'^Salmon Run/details/[0-9a-f]{64}\.json$')
+
+    def test_maximum_length_result_ids_use_fixed_length_paths(self):
         id_ = 'あ' * 170 + 'ab'
         self.assertEqual(utf8(id_), 512)
         replies = [{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}]
         out = run(replies=replies)
         self.assertTrue(out['ok'], out)
         self.assertEqual(len(out['saves']), 2)
-        for save in out['saves']:
-            self.assertLessEqual(utf8(save['key']), 1024)
-        self.assertIn(id_, out['saves'][1]['key'])
+        self.assertEqual(out['saves'][1]['path'], detail_path(id_))
+        self.assertEqual(len(out['saves'][1]['path']), len('Salmon Run/details/.json') + 64)
 
     def test_save_error_on_history_stops_before_any_detail_request(self):
         out = run(replies=self.replies((200, self.detail_text('d1'))), save_fail_at=1)
@@ -264,5 +288,5 @@ class SalmonSaveTests(unittest.TestCase):
         out = run(replies=self.replies((200, d1), (200, self.detail_text('d2'))), save_fail_at=2)
         self.assertFalse(out['ok'], out)
         self.assertEqual(len(out['requests']), 2)  # history + d1; d2 never requested
-        self.assertEqual([s['json'] for s in out['saves']], [self.HISTORY_TEXT, d1])
+        self.assertEqual([s['contents'] for s in out['saves']], [self.HISTORY_TEXT, d1])
         self.assertTrue(out['saves'][1].get('failed'))

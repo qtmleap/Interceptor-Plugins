@@ -13,7 +13,7 @@ workflow/native-credential/approval-UI proposal, which was outside the request.
 - Keep outgoing URL, method, headers and body solely in the JavaScript. There is
   no `outbound` manifest section and no use of `Interceptor.send`.
 - Retrieve and validate result responses, then save their original JSON text with
-  `Interceptor.saveJSON`. The user subsequently authorized native file saving.
+  `Interceptor.createFile`. The user subsequently authorized native file saving.
   External uploads remain deferred; no new screens or custom HTTP API are added.
 
 ## Behavior and limits
@@ -39,11 +39,17 @@ Player IDs are opaque and scoped to each result; all requests use the same
 captured Bearer token. A failed run must not claim complete acquisition.
 
 The validated history response and each validated detail response are saved
-verbatim through `Interceptor.saveJSON`. The `write.files` grant is required.
-A failed save stops the chain. Saved JSON contains the original API response,
+verbatim through `Interceptor.createFile` into `Interceptor.Storage.iCloudDrive`:
+`Salmon Run/history.json` and `Salmon Run/details/<sha256 hex of the result ID>.json`.
+The `write.files` grant is required. A failed save stops the chain. Saved JSON contains the original API response,
 without a wrapper, authentication headers or a diagnostic summary. The native
-host persists private files and exports copies to Documents/Plugins while the
-app is in the foreground.
+host persists private files and exports their original bytes while the app is in
+the foreground. The Plugin selects a path relative to the virtual storage root.
+A native folder grant maps a matching component prefix to the actual selected
+folder. Selecting iCloud Drive/Salmon Run therefore maps prefix Salmon Run and
+publishes history.json directly there, without duplicating the folder component.
+The Promise resolves on private publication;
+iCloud provider delivery and Apple's server upload happen afterward.
 
 ## Compatibility and evidence
 

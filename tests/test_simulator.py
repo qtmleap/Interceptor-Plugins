@@ -99,8 +99,8 @@ class SimulatorTests(unittest.TestCase):
         for native_key, rust_key in fields.items():
             self.assertEqual(native[native_key], actual[rust_key], native_key)
         fetch_app = (package / 'Sources/AutomationRuntime/JavaScriptFetchExecutor.swift').read_text()
-        # run-package-fetch calls the save-capable bridge; C retains the smaller ungranted cap.
-        fetch_native = int(re.search(r'static let saveCpuDeadlineMilliseconds = (\d+)', fetch_app).group(1))
+        # run-package-fetch calls the files-capable bridge; C retains the smaller ungranted cap.
+        fetch_native = int(re.search(r'static let filesCpuDeadlineMilliseconds = (\d+)', fetch_app).group(1))
         fetch_rust = re.search(r'const FETCH_LIMITS: Limits = Limits \{(.*?)\};', rust, re.S).group(1)
         self.assertIn('..LIMITS', fetch_rust)
         self.assertEqual(fetch_native, int(re.search(r'deadline_ms:\s*(\d+)', fetch_rust).group(1)))
