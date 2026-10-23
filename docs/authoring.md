@@ -15,6 +15,8 @@ plugins/request-summary/
 
 `plugin.json` declares metadata, explicit `read` and body `write` grants, `endpointBindings` and `settings`. Keep the plugin UUID stable after setup and increment its version when published content changes. Do not write `matches`, `hooks` or `sourceFiles` in this file. Optionally set `publishedAt` to the date you declare for the release, in UTC as `yyyy-MM-ddTHH:mm:ssZ` (for example `2026-10-21T09:30:00Z`). You write it yourself; the build copies it unchanged and never generates it. Omit it if you do not want to show a date.
 
+Optionally set `icon` to a PNG or WebP inside the plugin folder (for example `assets/Icon.webp`; lowercase `.png`/`.webp` suffix, ASCII path up to 256 bytes, file 1 to 65536 bytes, width and height each 1 to 1024, not animated). The build reads only regular files reached through real directories (no symlinks) and embeds the bytes in the package as `assets` (`{icon path: base64}`); without an icon `assets` is omitted. Validation is structural and does not prove the image decodes.
+
 The location `hooks/HOST/PATH/METHOD.ts` selects an exact host, path and method. For `/`, use `hooks/HOST/METHOD.ts`. Host names are lowercase; methods are uppercase. Paths are case-sensitive. Add another file to handle another API, with up to 16 route files per plugin.
 
 Each file makes one top-level `Interceptor.attach({ request: { ... }, response: { ... } })` call. Pass only the callbacks; there is no JavaScript match object, match ID or filename argument. The build derives routing from file locations and callback definitions. See the [sample source](../plugins/request-summary/hooks/api.example.com/search/POST.ts), [metadata](../plugins/request-summary/plugin.json) and [cases](../fixtures/cases.json).

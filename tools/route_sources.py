@@ -16,7 +16,7 @@ def directory(path):
 def metadata(path):
     value = load_json(path, str(path))
     required = ('schemaVersion', 'id', 'name', 'version', 'read', 'write', 'endpointBindings', 'settings')
-    optional = tuple(key for key in DISPLAY_METADATA_KEYS + (PUBLISHED_AT_KEY, 'outbound') if key in value)
+    optional = tuple(key for key in DISPLAY_METADATA_KEYS + (PUBLISHED_AT_KEY, 'outbound', 'icon') if key in value)
     require_exact_keys(value, required + optional, str(path))
     if value['schemaVersion'] != 2:
         raise ToolError(f'{path}: authored route plugins require schemaVersion 2')
