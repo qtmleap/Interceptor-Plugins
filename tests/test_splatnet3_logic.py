@@ -9,9 +9,13 @@ DRIVER = REPO / "tests" / "splatnet3_driver.ts"
 FIX = REPO / "fixtures" / "splatnet3-salmon"
 CATALOG = json.loads((REPO / "docs" / "development" / "splatnet3-queries.json").read_text())
 VERSION = "4.0.0-091d4283"
-# Independently verified values from the pinned primary mapping, not the catalog under test.
+# Expected protocol identifiers from the pinned mapping (4.0.0) and Nintendo public bundle (10.0.0).
+# Constants check catalog/hook consistency; provenance and live verification scope are documented separately.
 H = "0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f"
 D = "824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602"
+VERSION_10 = "10.0.0-d15503c4"
+H10 = "e11a8cf2c3de7348495dea5cdcaa25e0c153541c4ed63f044b6c174bc5b703df"
+D10 = "f2d55873a9281213ae27edc171e2b19131b3021a2ae263757543cdd3bf015cc8"
 PAIR = {"history": H, "detail": D}
 
 
@@ -54,6 +58,12 @@ class QueryTests(unittest.TestCase):
             self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "missing-context")
         self.assertEqual(run("resolveQueries", "9.9.9-deadbeef", CATALOG)["code"], "unsupported-version")
 
+    def test_exact_versions_resolve_independently(self):
+        self.assertEqual(run("resolveQueries", VERSION, CATALOG)["value"], PAIR)
+        self.assertEqual(run("resolveQueries", VERSION_10, CATALOG)["value"], {"history": H10, "detail": D10})
+        for v in ("10.0.0", "10.0.0-D15503C4", "10.0.1-d15503c4"):
+            self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "unsupported-version")
+
     def test_inherited_and_malformed(self):
         for v in ("__proto__", "constructor", "toString"):
             self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "unsupported-version")
@@ -74,7 +84,7 @@ class QueryTests(unittest.TestCase):
         self.assertEqual(run("makeHistoryQuery", {"history": "x", "detail": D})["code"], "invalid-catalog")
 
     def test_observation_hashes_match_catalog(self):
-        self.assertEqual(run("observationHashes", CATALOG)["value"], [H, D])
+        self.assertEqual(run("observationHashes", CATALOG)["value"], [H, D, H10, D10])
         two = {"versions": {VERSION: PAIR, "5.0.0-aaaaaaaa": {"history": H, "detail": "a" * 64}}}
         self.assertEqual(run("observationHashes", two)["value"], [H, D, "a" * 64])
         self.assertNotIn("b" * 64, run("observationHashes", two)["value"])

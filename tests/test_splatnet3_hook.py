@@ -10,6 +10,10 @@ VERSION = '4.0.0-091d4283'
 HISTORY = '0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f'
 DETAIL = '824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602'
 
+VERSION_10 = '10.0.0-d15503c4'
+HISTORY_10 = 'e11a8cf2c3de7348495dea5cdcaa25e0c153541c4ed63f044b6c174bc5b703df'
+DETAIL_10 = 'f2d55873a9281213ae27edc171e2b19131b3021a2ae263757543cdd3bf015cc8'
+
 
 def response(**changes):
     value = {'status': 201, 'body': {'bulletToken': 'synthetic-token'},
@@ -56,6 +60,26 @@ class SalmonHookTests(unittest.TestCase):
         summary = out['result']['actions'][0]['json']
         self.assertEqual(summary['acquired'], ['d1', 'd2'])
         self.assertNotIn('synthetic-token', json.dumps(summary))
+
+    def test_version_10_uses_its_own_hashes(self):
+        res = response(request={'headers': {'x-web-view-ver': VERSION_10, 'accept-language': 'ja-JP'}})
+        out = run(res=res, replies=[{'status': 200, 'body': history(['d1', 'd1', 'd2'])},
+                                    {'status': 200, 'body': detail('d1')},
+                                    {'status': 200, 'body': detail('d2')}])
+        self.assertTrue(out['ok'], out)
+        bodies = [json.loads(r['body']) for r in out['requests']]
+        self.assertEqual(len(bodies), 3)
+        self.assertEqual(bodies[0]['extensions']['persistedQuery']['sha256Hash'], HISTORY_10)
+        self.assertEqual([b['variables']['coopHistoryDetailId'] for b in bodies[1:]], ['d1', 'd2'])
+        self.assertTrue(all(b['extensions']['persistedQuery']['sha256Hash'] == DETAIL_10 for b in bodies[1:]))
+        for req in out['requests']:
+            self.assertEqual(req['headers']['x-web-view-ver'], VERSION_10)
+
+    def test_version_10_empty_history_sends_only_history(self):
+        res = response(request={'headers': {'x-web-view-ver': VERSION_10, 'accept-language': 'ja-JP'}})
+        out = run(res=res, replies=[{'status': 200, 'body': history([])}])
+        self.assertTrue(out['ok'], out)
+        self.assertEqual(len(out['requests']), 1)
 
     def test_failed_token_response_does_not_send(self):
         for res in [response(status=401), response(body={}), response(body={'bulletToken': ''})]:

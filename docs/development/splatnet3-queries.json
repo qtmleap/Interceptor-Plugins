@@ -3,9 +3,27 @@
     "4.0.0-091d4283": {
       "history": "0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f",
       "detail": "824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602"
+    },
+    "10.0.0-d15503c4": {
+      "history": "e11a8cf2c3de7348495dea5cdcaa25e0c153541c4ed63f044b6c174bc5b703df",
+      "detail": "f2d55873a9281213ae27edc171e2b19131b3021a2ae263757543cdd3bf015cc8"
     }
   },
   "sources": {
+    "publicBundle10": {
+      "url": "https://api.lp1.av5ja.srv.nintendo.net/static/js/main.8f32ce85.js",
+      "sha256": "2ca57e2076efafc81a8a516eec606275ee0f307eb8f11796b9dad18acd35901d",
+      "appFullVersion": "10.0.0-d15503c4",
+      "appRevision": "d15503c46ed2e426fb3f57972d5f8c9707dcc53e",
+      "note": "Nintendo public web bundle read from a local copy on the native host; its sha256 was recomputed and matches. Persisted-query params.id/name pairs: CoopHistoryQuery e11a8cf2..., CoopHistoryDetailQuery f2d55873.... The detail variable coopHistoryDetailId and alias coopHistoryDetail were verified by Codex, not re-derived here. History matched a real NSO 200 capture with x-web-view-ver 10.0.0-d15503c4; detail was not exercised because the account has empty history.",
+      "realCommunication": {
+        "date": "2026-10-23",
+        "nativeRevision": "30b71641fdc145cc424d44a0976c6eff9c54f407",
+        "boundary": "Physical-device hosted test replays a captured real BulletToken response through the generated Plugin, QuickJS fetch and HTTPPluginDirectTransport. Does not cover automatic installed-Plugin activation.",
+        "history": "HTTP 200, validated response, zero history entries.",
+        "detail": "Not exercised: no history entries."
+      }
+    },
     "protocol": {
       "repository": "https://github.com/samuelthomas2774/nxapi",
       "revision": "47c9d35d9d51d33e62dd6d3733b616e0ad31b02b",
