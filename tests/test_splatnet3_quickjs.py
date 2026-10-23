@@ -26,18 +26,24 @@ class SalmonQuickJSTests(unittest.TestCase):
         assert build.returncode == 0, build.stdout + build.stderr
         (ROOT / 'build/evidence').mkdir(parents=True, exist_ok=True)
 
-    def execute(self, replies):
+    def execute(self, replies, *, save_fail_at=None):
         event = {'phase': 'response.onLeave', 'request': {
             'method': 'POST', 'host': 'api.lp1.av5ja.srv.nintendo.net', 'path': '/api/bullet_tokens',
             'headers': {'x-web-view-ver': fx.VERSION, 'accept-language': 'ja-JP'}},
             'response': {'status': 201, 'headers': {}, 'body': {'bulletToken': 'synthetic-token', 'lang': 'ja-JP'}}}
         packets = b''
+        planned_saves = 0
         if isinstance(replies, bytes):
             packets = replies
         else:
             for status, body in replies:
-                raw = json.dumps(body, separators=(',', ':')).encode()
+                raw = body.encode() if isinstance(body, str) else json.dumps(body, separators=(',', ':')).encode()
                 packets += f'RESPONSE {status} {len(raw)}\n'.encode() + raw + b'\n'
+                # Each test provides a valid history/detail where it expects a publication.
+                # The native bridge still checks permissions, JSON and invocation budgets.
+                if status == 200:
+                    planned_saves += 1
+                    packets += b'SAVE_ERROR\n' if planned_saves == save_fail_at else b'SAVED\n'
         with tempfile.TemporaryDirectory(prefix='splatnet3-quickjs-') as directory:
             event_path, config_path = Path(directory) / 'event.json', Path(directory) / 'config.json'
             event_path.write_text(json.dumps(event))
@@ -47,10 +53,19 @@ class SalmonQuickJSTests(unittest.TestCase):
                                    str(event_path), str(config_path)], input=packets, capture_output=True, timeout=20)
         stream = io.BytesIO(proc.stdout)
         requests, result = [], None
+        self.saves = []
         while line := stream.readline():
             fields = line.decode().strip().split()
-            self.assertIn(fields[0], ['FETCH', 'RESULT'], proc.stdout.decode(errors='replace') + proc.stderr.decode())
+            self.assertIn(fields[0], ['FETCH', 'SAVE', 'RESULT'], proc.stdout.decode(errors='replace') + proc.stderr.decode())
             count = int(fields[1])
+            if fields[0] == 'SAVE':
+                key = stream.read(count).decode()
+                self.assertEqual(stream.read(1), b'\n')
+                text = stream.read(int(fields[2])).decode()
+                self.assertEqual(stream.read(1), b'\n')
+                self.assertTrue(0 < int(fields[3]) <= 10000)
+                self.saves.append((key, text))
+                continue
             value = json.loads(stream.read(count))
             self.assertEqual(stream.read(1), b'\n')
             if fields[0] == 'FETCH':
@@ -111,3 +126,32 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(proc.stderr, b'QuickJS status 6\n')
         self.assertEqual(len(requests), 1)
         self.assertIsNone(result)
+
+    def test_original_response_texts_reach_the_native_save_callback(self):
+        history = ' {"data": ' + json.dumps(fx.history(['d1'])['data']) + '} \n'
+        detail = ' {"data": ' + json.dumps(fx.detail('d1')['data']) + '} \n'
+        proc, _, result = self.execute([(200, history), (200, detail)])
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual([text for _, text in self.saves], [history, detail])
+        self.assertEqual(result['actions'][0]['json']['acquired'], ['d1'])
+
+    def test_save_failure_stops_later_work_in_the_real_bridge(self):
+        proc, requests, result = self.execute([(200, fx.history(['d1', 'd2'])),
+                                              (200, fx.detail('d1')), (200, fx.detail('d2'))], save_fail_at=2)
+        self.assertEqual(proc.returncode, 6, proc.stderr.decode())
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(len(self.saves), 2)
+        self.assertIsNone(result)
+
+    def test_incremental_detail_batch_exceeds_heap_without_retaining_bodies(self):
+        ids = ['d' + str(n) for n in range(20)]
+        replies = [(200, fx.history(ids))]
+        for id_ in ids:
+            body = fx.detail(id_)
+            body['data']['coopHistoryDetail']['padding'] = 'x' * (450 * 1024)
+            replies.append((200, body))
+        proc, requests, result = self.execute(replies)
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual(len(requests), 21)
+        self.assertEqual(len(self.saves), 21)
+        self.assertEqual(result['actions'][0]['json']['acquired'], ids)

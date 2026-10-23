@@ -159,6 +159,14 @@ limits also apply. Revocation or tunnel shutdown cancels pending work.
 The existing synthetic-test screen sends no network traffic; use the offline
 `interceptor-simulator run-package-fetch` fixture protocol for response tests.
 
+## Interceptor.saveJSON {#save-json}
+
+`await Interceptor.saveJSON(key, jsonText)` stores the JSON text `jsonText` under `key` in the plugin's own
+file storage and returns `Promise<void>`. It requires `write.files: true` in the manifest (optional, default
+`false`; schema 1 rejects it). Call it directly, not aliased or through `globalThis`, inside a
+`response.onLeave` callback and await it. The build accepts only direct calls. A failed write rejects the
+promise; runtime enforcement remains the host's responsibility.
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })` requests a GET to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
@@ -208,7 +216,7 @@ Keep the plugin UUID `id` after publication and increment `version` for changes.
 - `queryKeys`: readable query keys.
 - `body.mode`: `none` omits the body; `json` exposes parsed JSON.
 
-`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Method, URL, headers and status cannot be changed.
+`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Optional `write.files` (default `false`) allows `Interceptor.saveJSON`. Method, URL, headers and status cannot be changed.
 
 `endpointBindings` is required and lists names used to construct webhook-shaped actions in synthetic tests; use `[]` when no names are needed. Synthetic tests may supply a test ID through `cfg.endpoints.preview`. Live processing supplies no endpoint IDs, so the examples return without an action when the ID is absent. Matching already checks the host and method. Settings are available as `cfg.settings`.
 

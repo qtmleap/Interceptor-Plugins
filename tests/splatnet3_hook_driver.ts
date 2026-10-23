@@ -11,8 +11,16 @@ const code = input.source.endsWith('.ts')
 let hooks: any
 const requests: any[] = []
 const replies = input.replies ?? []
+const saves: { key: string; json: string; failed?: boolean }[] = []
 const context = vm.createContext({
-  Interceptor: { attach(value: any) { hooks = value } },
+  Interceptor: {
+    attach(value: any) { hooks = value },
+    async saveJSON(key: string, json: string) {
+      const failed = input.saveFailAt === saves.length + 1
+      saves.push({ key, json, ...(failed ? { failed } : {}) })
+      if (failed) throw new Error('save-failed')
+    },
+  },
   async fetch(url: string, init: any) {
     requests.push({ url, ...init })
     const reply = replies[requests.length - 1]
@@ -27,7 +35,7 @@ const context = vm.createContext({
 vm.runInContext(code, context, { timeout: 1000 })
 try {
   const result = await hooks.response.onLeave(input.response, { endpoints: {}, settings: input.settings ?? {} })
-  console.log(JSON.stringify({ ok: true, result: result ?? null, requests }))
+  console.log(JSON.stringify({ ok: true, result: result ?? null, requests, saves }))
 } catch (e) {
-  console.log(JSON.stringify({ ok: false, code: (e as Error).message, requests }))
+  console.log(JSON.stringify({ ok: false, code: (e as Error).message, requests, saves }))
 }

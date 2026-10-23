@@ -94,6 +94,12 @@ declare namespace Interceptor {
     text(): Promise<string>;
     json(): Promise<any>;
   }
+  /**
+   * Stores `jsonText` (valid JSON text) under `key` in the plugin's own files. Requires `write.files: true`.
+   * Call it directly (not aliased or via `globalThis`) inside a registered `response.onLeave` callback and await it;
+   * a failure rejects. The compiler checks direct references; runtime enforcement remains the host's responsibility.
+   */
+  function saveJSON(key: string, jsonText: string): Promise<void>;
   /** Registers this file's handlers. The build derives targets from its path. */
   function attach(hooks: Hooks): void;
 }

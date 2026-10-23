@@ -1,4 +1,4 @@
-// SplatNet 3 Salmon Run acquisition. Requests are defined only in this file.
+// SplatNet 3 Salmon Run acquisition. Requests are defined only in this file; results are stored with Interceptor.saveJSON.
 // Pure SplatNet 3 Salmon Run result logic. No I/O, no host calls, no state.
 type QueryPair = { history: string; detail: string }
 type QueryCatalog = { versions: { [version: string]: QueryPair } }
@@ -127,6 +127,15 @@ function historyIDs(body: unknown): string[] {
   return seen
 }
 
+// Response text is parsed only to validate it; the original text is what gets saved.
+function parseText(text: string): unknown {
+  try { return JSON.parse(text) } catch (e) { return fail('invalid-response') }
+}
+
+const HISTORY_KEY = 'splatnet3-salmon/history'
+// Result IDs are at most 512 UTF-8 bytes, so this key stays within the 1024-byte logical key limit.
+const detailKey = (id: string): string => 'splatnet3-salmon/detail/' + id
+
 const failure = (code: DetailCode): DetailOutcome => ({ kind: 'failure', code })
 
 function rejectedPersistedQuery(errors: unknown[]): boolean {
@@ -213,8 +222,10 @@ Interceptor.attach({
       })
       if (history.status === 401 || history.status === 403) throw new Error('recapture')
       if (!history.ok) throw new Error('http')
-      const ids = historyIDs(await history.json())
-      const results: { id: string; result: unknown }[] = []
+      const historyText = await history.text()
+      const ids = historyIDs(parseText(historyText))
+      await Interceptor.saveJSON(HISTORY_KEY, historyText)
+      const acquired: string[] = []
       const unavailable: string[] = []
       let principal: string | null = null
       for (const id of ids.slice(0, limit)) {
@@ -225,19 +236,20 @@ Interceptor.attach({
         if (reply.status === 401 || reply.status === 403) throw new Error('recapture')
         if (reply.status === 404) { unavailable.push(id); continue }
         if (!reply.ok) throw new Error('http')
-        const data: unknown = await reply.json()
+        const text = await reply.text()
+        const data = parseText(text)
         const checked = inspectDetail(reply.status, data, id, principal)
         if (checked.kind === 'failure') throw new Error(checked.code)
         if (checked.kind === 'unavailable') { unavailable.push(id); continue }
         principal = checked.principal
-        // Raw result JSON is available here for a later, ordinary fetch upload.
-        // This acquisition-only Plugin does not upload or persist it.
-        results.push({ id, result: (data as { data: { coopHistoryDetail: unknown } }).data.coopHistoryDetail })
+        // Save the validated response text as received; a failed save stops the chain.
+        await Interceptor.saveJSON(detailKey(id), text)
+        acquired.push(id)
       }
       // Existing diagnostic action; not an HTTP send. Never include the token or result bodies.
       return { actions: [{
         type: 'webhook', endpointId: '8B71B789-357C-44D8-AF3A-1D8192234BB5',
-        json: { version, acquired: results.map(item => item.id), unavailable, remaining: Math.max(0, ids.length - limit) },
+        json: { version, acquired, unavailable, remaining: Math.max(0, ids.length - limit) },
       }] }
     },
   },

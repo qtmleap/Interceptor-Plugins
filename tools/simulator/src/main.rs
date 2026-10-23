@@ -71,7 +71,7 @@ extern "C" {
         body: *const u8,
         len: usize,
     ) -> i32;
-    fn qjs_run_v2_fetch(
+    fn qjs_run_v2_fetch_save(
         token: *mut std::ffi::c_void,
         limits: *const Limits,
         callback: unsafe extern "C" fn(
@@ -82,6 +82,15 @@ extern "C" {
             *mut std::ffi::c_void,
         ) -> i32,
         opaque: *mut std::ffi::c_void,
+        save: unsafe extern "C" fn(
+            *mut std::ffi::c_void,
+            *const u8,
+            usize,
+            *const u8,
+            usize,
+            u32,
+        ) -> i32,
+        save_opaque: *mut std::ffi::c_void,
         package: *const u8,
         package_len: usize,
         hook: *const std::ffi::c_char,
@@ -197,6 +206,60 @@ unsafe extern "C" fn fixture_fetch(
     }
 }
 
+// Offline observer only: no filesystem writes are exposed by the simulator.
+// SAVE key_len text_len timeout\n<key>\n<original JSON>\n -> SAVED or SAVE_ERROR.
+unsafe extern "C" fn fixture_save(
+    opaque: *mut std::ffi::c_void,
+    key: *const u8,
+    key_len: usize,
+    text: *const u8,
+    text_len: usize,
+    timeout: u32,
+) -> i32 {
+    if opaque.is_null()
+        || key.is_null()
+        || text.is_null()
+        || key_len > 1024
+        || text_len > 1024 * 1024
+    {
+        return 1;
+    }
+    let transport = &mut *(opaque as *mut FixtureTransport);
+    let result = (|| -> Result<(), String> {
+        writeln!(
+            transport.output,
+            "SAVE {} {} {}",
+            key_len, text_len, timeout
+        )
+        .and_then(|_| {
+            transport
+                .output
+                .write_all(std::slice::from_raw_parts(key, key_len))
+        })
+        .and_then(|_| transport.output.write_all(b"\n"))
+        .and_then(|_| {
+            transport
+                .output
+                .write_all(std::slice::from_raw_parts(text, text_len))
+        })
+        .and_then(|_| transport.output.write_all(b"\n"))
+        .and_then(|_| transport.output.flush())
+        .map_err(|_| "cannot write fixture save")?;
+        match transport.line()?.as_str() {
+            "SAVED" => Ok(()),
+            "SAVE_ERROR" => Err("fixture save failure".into()),
+            _ => Err("invalid fixture save reply".into()),
+        }
+    })();
+    match result {
+        Ok(()) => 0,
+        Err(error) => {
+            transport.error = Some(error);
+            1
+        }
+    }
+}
+
 fn read_regular(path: &str, cap: usize) -> Result<Vec<u8>, String> {
     let file: File = OpenOptions::new()
         .read(true)
@@ -230,7 +293,7 @@ fn execute(args: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     if args.is_empty() || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h")) {
-        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run-package-fetch PACKAGE.json response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\nrun-package-fetch uses the offline FETCH/RESPONSE fixture protocol on stdin/stdout; it never sends HTTP.\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
+        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run-package-fetch PACKAGE.json response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\nrun-package-fetch uses the offline FETCH/RESPONSE and SAVE/SAVED fixture protocol on stdin/stdout; it never sends HTTP.\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
         return Ok(0);
     }
     match (args[0].as_str(), args.len()) {
@@ -312,10 +375,12 @@ fn execute(args: &[String]) -> Result<i32, String> {
             };
             let result = unsafe {
                 if fetch {
-                    qjs_run_v2_fetch(
+                    qjs_run_v2_fetch_save(
                         token.0,
                         &FETCH_LIMITS,
                         fixture_fetch,
+                        (&mut fixture as *mut FixtureTransport).cast(),
+                        fixture_save,
                         (&mut fixture as *mut FixtureTransport).cast(),
                         source.as_ptr(),
                         source.len(),

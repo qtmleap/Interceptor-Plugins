@@ -26,17 +26,22 @@ const isAttach = node => ts.isCallExpression(node) && ts.isPropertyAccessExpress
 const isSend = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
   && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
   && node.expression.name.text === 'send';
+// Any `Interceptor.saveJSON` property access, whether or not it is a direct call.
+const isSaveAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+  && node.expression.text === 'Interceptor' && node.name.text === 'saveJSON';
 
 function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
   const sends = [];
+  const saves = [];
   const references = [];
   const walk = (node, parent) => {
     if (isAttach(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) calls.push(node);
     if (isSend(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) sends.push(node);
+    if (isSaveAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) saves.push({ access: node, parent });
     if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
         && ts.isIdentifier(node.expression) && node.expression.text === 'Interceptor'
-        && (ts.isElementAccessExpression(node) || ['attach', 'send'].includes(node.name.text))
+        && (ts.isElementAccessExpression(node) || ['attach', 'send', 'saveJSON'].includes(node.name.text))
         && checker.getSymbolAtLocation(node.expression) !== namespace) {
       throw new Error(`${source.fileName}: Interceptor host calls cannot use a shadowed name`);
     }
@@ -53,7 +58,8 @@ function staticHooks(source, checker, namespace, globalObject) {
     throw new Error(`${source.fileName}: use one direct top-level Interceptor.attach({ ... })`);
   }
   const call = calls[0];
-  const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression)]);
+  const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression),
+    ...saves.map(save => save.access.expression)]);
   if (references.some(node => !directReferences.has(node))) {
     throw new Error(`${source.fileName}: Interceptor host calls cannot be aliased or called indirectly`);
   }
@@ -97,7 +103,14 @@ function staticHooks(source, checker, namespace, globalObject) {
       throw new Error(`${source.fileName}: Interceptor.send is available only inside a registered callback`);
     }
   }
-  return { hooks, leaveRegions };
+  // saveJSON must be a direct call to the property inside a registered response.onLeave callback.
+  for (const { access, parent } of saves) {
+    if (!ts.isCallExpression(parent) || parent.expression !== access
+        || !leaveRegions.some(region => access.pos >= region.pos && access.end <= region.end)) {
+      throw new Error(`${source.fileName}: Interceptor.saveJSON must be called directly inside a registered response.onLeave callback`);
+    }
+  }
+  return { hooks, leaveRegions, usesFiles: saves.length > 0 };
 }
 
 function legacyHostValues(source, checker, namespace) {
@@ -198,7 +211,7 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     output.code = contents;
   });
   if (result.emitSkipped || output.code === undefined) throw new Error(`Compilation failed: ${file}`);
-  return { code: output.code, hooks };
+  return { code: output.code, hooks, usesFiles: routedResult?.usesFiles ?? false };
 }
 
 try {
@@ -228,6 +241,9 @@ try {
       const sourceFiles = {};
       const matches = plugin.routes.map(route => {
         const result = compile(path.join(root, 'plugins', name, route.file), sdk, [], true);
+        if (result.usesFiles && plugin.metadata.write?.files !== true) {
+          throw new Error(`plugins/${name}/${route.file}: Interceptor.saveJSON requires write.files: true in plugin.json`);
+        }
         sourceFiles[route.emitted] = result.code;
         const hooks = Object.fromEntries(Object.entries(result.hooks).map(([leg, callbacks]) =>
           [leg, Object.fromEntries(Object.keys(callbacks).map(phase => [phase, route.emitted]))]));

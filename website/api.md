@@ -176,6 +176,13 @@ Interceptor.attach({
 既存の合成テスト画面はネットワークを実行しません。オフラインの応答を使う検証には
 `interceptor-simulator run-package-fetch`を使います。
 
+## Interceptor.saveJSON {#save-json}
+
+`await Interceptor.saveJSON(key, jsonText)`は、JSON文字列`jsonText`をキー`key`でPlugin専用の保存領域へ書き込みます（`Promise<void>`）。
+manifestの`write.files`を`true`にした場合だけ使えます（省略時は`false`。スキーマ1では指定できません）。
+`response.onLeave`コールバック内で、別名や`globalThis`を経由せず直接呼び、必ず`await`してください。ビルドは直接呼び出しだけを受け付けます。
+書き込みに失敗するとPromiseは拒否されます。実行時の検証はホストの責任です。
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })`は、manifestの`outbound`に宣言した別のAPIへGETリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
@@ -225,7 +232,7 @@ Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 - `queryKeys`: 読み取るクエリキー
 - `body.mode`: `none`は本文を渡さず、`json`はJSON本文を渡す
 
-`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
+`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。`write.files`（省略可、既定`false`）は`Interceptor.saveJSON`の利用権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
 
 `endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`cfg.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`cfg.settings`で参照します。
 

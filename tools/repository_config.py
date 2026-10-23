@@ -509,7 +509,9 @@ def validate_manifest(m, what):
         for match in matches:
             _validate_match(match, what, False, v2=True)
         write = m["write"]
-        require_exact_keys(write, ("requestBody", "responseBody"), what + " write")
+        # `files` (Interceptor.saveJSON) is optional; absence means false.
+        grants = ("requestBody", "responseBody") + (("files",) if isinstance(write, dict) and "files" in write else ())
+        require_exact_keys(write, grants, what + " write")
         if not all(isinstance(write[key], bool) for key in write):
             _fail(what, "write grants must be booleans")
     else:
