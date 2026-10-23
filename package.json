@@ -26,6 +26,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.6.2",
     "@tailwindcss/vite": "4.3.3",
+    "enhanced-resolve": "5.26.0",
+    "escape-string-regexp": "5.0.0",
+    "fast-json-stable-stringify": "2.1.0",
     "js-sha256": "1.0.0",
     "tailwindcss": "4.3.3",
     "typescript": "5.8.3",

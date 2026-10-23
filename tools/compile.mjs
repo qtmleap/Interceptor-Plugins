@@ -2,7 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { builtinModules } from 'node:module';
+import resolve from 'enhanced-resolve';
 import ts from 'typescript';
 
 const root = path.resolve(process.argv[2] || '.');
@@ -16,18 +17,26 @@ const options = {
   lib: ['lib.es2020.d.ts'], types: [], newLine: ts.NewLineKind.LineFeed,
   declaration: false, sourceMap: false, removeComments: false, noResolve: false,
 };
-// The only dependency a routed hook may import, bundled into the hook from pinned, hash-verified files.
-const DEPENDENCY = {
-  specifier: 'js-sha256', version: '1.0.0', exportName: 'sha256',
-  declaration: 'index.d.ts', declarationSha256: '5bc40ff72c1bdfcd0b186cf0c17d74996d1fcde69ee6ab3b71337ce98b5f2c5f',
-  source: 'build/sha256.cjs', sourceSha256: 'fb7860e00d7718e1c4b0d1df112727261f8cbee112963db1b46ad7b5874041db',
-  license: 'LICENSE.txt', licenseSha256: '2153bd2978793748fbe0eb8f838ae2ae19f03f9d4ee5473dd1628a0c0790e4ab',
-};
-const ENTRY_NAMESPACE = 'interceptor-entry';
-const DEPENDENCY_NAMESPACE = 'interceptor-dependency';
 const MAX_OUTPUT = 131072;
-const LEFTOVER_IDENTIFIERS = new Set(['require', 'eval', 'Function', 'process', 'Buffer', 'TextEncoder', 'TextDecoder', '__dirname', '__filename']);
-const importOptions = { ...options, module: ts.ModuleKind.ES2015, moduleResolution: ts.ModuleResolutionKind.Bundler };
+const BUILTINS = new Set(builtinModules.flatMap(name => [name, 'node:' + name]));
+// Bun prioritizes builtin polyfills even over installed packages with the same name.
+const installedResolvers = Object.fromEntries(['import', 'require'].map(kind => [kind, resolve.create.sync({
+  conditionNames: ['browser', kind, 'default'], mainFields: ['browser', 'module', 'main'], aliasFields: ['browser'],
+  extensions: ['.js', '.mjs', '.cjs', '.ts', '.mts', '.cts', '.json'],
+})]));
+const importOptions = { ...options, module: ts.ModuleKind.ES2015, moduleResolution: ts.ModuleResolutionKind.Bundler,
+  esModuleInterop: true, allowSyntheticDefaultImports: true, customConditions: ['browser'], preserveSymlinks: true };
+const unsupportedGlobals = new Set(['require', 'module', 'exports', 'process', 'Buffer', '__dirname', '__filename',
+  'TextEncoder', 'TextDecoder', 'console', 'setTimeout', 'setInterval', 'setImmediate', 'window', 'document',
+  'self', 'global', 'navigator', 'XMLHttpRequest', 'WebSocket', 'crypto', 'URL', 'URLSearchParams']);
+const isDependency = file => path.resolve(file).startsWith(path.join(root, 'node_modules') + path.sep);
+const isPropertyName = node =>
+  (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+  || (ts.isQualifiedName(node.parent) && node.parent.right === node)
+  || (ts.isBindingElement(node.parent) && node.parent.propertyName === node)
+  || ((ts.isPropertyAssignment(node.parent) || ts.isPropertyDeclaration(node.parent)
+    || ts.isMethodDeclaration(node.parent) || ts.isGetAccessorDeclaration(node.parent)
+    || ts.isSetAccessorDeclaration(node.parent)) && node.parent.name === node);
 const regular = file => {
   const info = fs.lstatSync(file);
   if (!info.isFile() || info.isSymbolicLink()) throw new Error(`Expected a regular file: ${file}`);
@@ -47,83 +56,205 @@ const isStorageAccess = node => ts.isPropertyAccessExpression(node) && ts.isIden
   && node.expression.text === 'Interceptor' && node.name.text === 'Storage';
 const STORAGE_CASES = ['local', 'iCloudDrive'];
 
-// Accept exactly `import { sha256 } from 'js-sha256'` as the only import; any other form is rejected.
-function approvedImport(source) {
+function checkSpecifier(specifier) {
+  if (/^(node:|bun:)/.test(specifier)) {
+    throw new Error(`Unsupported runtime module ${specifier}: use a package that runs without Node or Bun APIs`);
+  }
+  if (!/^(?:@[a-z0-9_.-]+\/)?[a-z0-9_][a-z0-9_.-]*(?:\/[a-z0-9_@.\/-]+)?$/i.test(specifier)
+      || specifier.split('/').some(part => part === '.' || part === '..')) {
+    throw new Error(`Only installed package imports are supported: ${specifier}`);
+  }
+}
+
+function approvedImports(source) {
   const imports = source.statements.filter(ts.isImportDeclaration);
-  if (!imports.length) return null;
-  const [node] = imports;
-  const clause = node.importClause;
-  const bindings = clause?.namedBindings;
-  if (imports.length !== 1 || !clause || clause.isTypeOnly || clause.name || node.attributes
-      || !bindings || !ts.isNamedImports(bindings) || bindings.elements.length !== 1
-      || bindings.elements[0].isTypeOnly || bindings.elements[0].propertyName
-      || bindings.elements[0].name.text !== DEPENDENCY.exportName
-      || !ts.isStringLiteral(node.moduleSpecifier) || node.moduleSpecifier.text !== DEPENDENCY.specifier) {
-    throw new Error(`${source.fileName}: the only supported import is import { ${DEPENDENCY.exportName} } from '${DEPENDENCY.specifier}'`);
+  for (const node of imports) {
+    if (!ts.isStringLiteral(node.moduleSpecifier) || node.attributes) {
+      throw new Error(`${source.fileName}: use static package imports without attributes`);
+    }
+    checkSpecifier(node.moduleSpecifier.text);
   }
-  return node;
+  return imports;
 }
 
-function dependencyFile(relative, digest) {
-  const file = path.join(root, 'node_modules', DEPENDENCY.specifier, relative);
-  if (!fs.existsSync(file)) throw new Error(`Missing ${DEPENDENCY.specifier}@${DEPENDENCY.version}: run bun install --frozen-lockfile --ignore-scripts`);
-  const real = fs.realpathSync(file);
-  regular(real);
-  const bytes = fs.readFileSync(real);
-  if (createHash('sha256').update(bytes).digest('hex') !== digest) {
-    throw new Error(`${DEPENDENCY.specifier}/${relative} does not match the pinned ${DEPENDENCY.version} release`);
+function packageNotices(file, packages) {
+  for (const directory of [path.dirname(file), ...parents(path.dirname(file))]) {
+    const metadata = path.join(directory, 'package.json');
+    if (!fs.existsSync(metadata)) continue;
+    const pkg = JSON.parse(fs.readFileSync(metadata, 'utf8'));
+    if (!pkg.name || !pkg.version) continue;
+    const key = `${pkg.name}@${pkg.version}`;
+    if (!packages.has(key)) {
+      const noticeDirectories = [directory, ...parents(directory)].filter(parent => {
+        const metadata = path.join(parent, 'package.json');
+        if (!fs.existsSync(metadata)) return false;
+        const candidate = JSON.parse(fs.readFileSync(metadata, 'utf8'));
+        return candidate.name === pkg.name && candidate.version === pkg.version;
+      });
+      const notices = noticeDirectories.flatMap(parent => fs.readdirSync(parent).sort()
+        .filter(name => /^(licen[cs]e|copying|notice)(?:[.\-]|$)/i.test(name))
+        .map(name => path.join(parent, name)).filter(name => fs.statSync(name).isFile())
+        .map(name => fs.readFileSync(name, 'utf8')));
+      packages.set(key, [key, ...new Set(notices)].join('\n'));
+    }
+    return;
   }
-  return { real, text: bytes.toString('utf8') };
 }
 
-// Bundle emitted ES module text and the pinned CommonJS build into one self-contained IIFE; nothing else can resolve.
-async function bundle(code) {
-  const dependency = dependencyFile(DEPENDENCY.source, DEPENDENCY.sourceSha256).text;
-  const license = dependencyFile(DEPENDENCY.license, DEPENDENCY.licenseSha256).text.trim();
+function parents(directory) {
+  const parent = path.dirname(directory);
+  return parent === directory ? [] : [parent, ...parents(parent)];
+}
+
+// Normal Bun package resolution; only the checked entry is replaced with TypeScript's emitted JS.
+async function bundle(code, file) {
+  const packages = new Map();
   const build = await Bun.build({
-    entrypoints: [`${ENTRY_NAMESPACE}:main`], target: 'browser', format: 'iife', minify: false, sourcemap: 'none',
-    splitting: false, throw: false,
-    plugins: [{
-      name: 'interceptor-virtual',
-      setup(api) {
-        api.onResolve({ filter: /.*/ }, args => {
-          if (args.path === `${ENTRY_NAMESPACE}:main`) return { path: 'main', namespace: ENTRY_NAMESPACE };
-          if (args.path === DEPENDENCY.specifier) return { path: 'sha256.cjs', namespace: DEPENDENCY_NAMESPACE };
-          throw new Error(`Unresolvable import: ${args.path}`);
-        });
-        api.onLoad({ filter: /.*/, namespace: ENTRY_NAMESPACE }, () => ({ contents: code, loader: 'js' }));
-        api.onLoad({ filter: /.*/, namespace: DEPENDENCY_NAMESPACE }, () => ({ contents: dependency, loader: 'js' }));
-      },
-    }],
+    entrypoints: [file], root, target: 'browser', format: 'iife', packages: 'bundle',
+    minify: { whitespace: true, syntax: true, identifiers: true }, sourcemap: 'none', splitting: false,
+    env: 'disable', define: { 'process.env.NODE_ENV': '"production"' }, conditions: ['browser'], throw: false,
+    plugins: [{ name: 'interceptor-packages', setup(api) {
+      api.onResolve({ filter: /.*/ }, args => {
+        if (/^(node:|bun:|https?:|data:|file:)/.test(args.path)) {
+          throw new Error(`Unsupported runtime module ${args.path} imported by ${args.importer}`);
+        }
+        if (BUILTINS.has(args.path)) {
+          try {
+            const resolver = installedResolvers[args.kind === 'require-call' ? 'require' : 'import'];
+            const resolved = resolver(path.dirname(args.importer || file), args.path);
+            if (resolved === false) return { path: args.path, namespace: 'interceptor-empty' };
+            if (resolved) return { path: resolved };
+          } catch { /* A builtin without an installed implementation is unavailable. */ }
+          throw new Error(`Unsupported runtime module ${args.path}: install a QuickJS-compatible package implementation`);
+        }
+      });
+      api.onLoad({ filter: /.*/, namespace: 'interceptor-empty' }, () => ({ contents: 'module.exports = {};', loader: 'js' }));
+      api.onLoad({ filter: /.*/, namespace: 'file' }, args => {
+        if (args.path === file) return { contents: code, loader: 'js' };
+        if (!/\.(?:[cm]?[jt]sx?|json)$/.test(args.path)) {
+          throw new Error(`Unsupported package asset ${args.path}: only JavaScript, TypeScript and JSON can be bundled`);
+        }
+        const contents = fs.readFileSync(args.path, 'utf8');
+        if (/\brequire\s*\(|\bimport\s*[.(]/.test(contents)) checkRuntimeLoading(contents, args.path);
+        packageNotices(args.path, packages);
+      });
+    } }],
   });
-  if (!build.success || build.outputs.length !== 1 || build.logs.length !== 0) {
-    throw new Error(`Bundling failed: ${build.logs.map(log => log.message).join('; ')}`);
+  if (!build.success) throw new Error(`Bundling failed: ${build.logs.map(log => log.message).join('; ')}`);
+  if (build.outputs.length !== 1 || build.outputs[0].kind !== 'entry-point') {
+    throw new Error('A hook must bundle into one JavaScript file without external assets');
   }
-  const bundled = await build.outputs[0].text();
-  const output = `/*! ${DEPENDENCY.specifier}@${DEPENDENCY.version}\n${license.replaceAll('*/', '* /')}\n*/\n${bundled}`;
+  const notices = [...packages.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([, text]) => text).join('\n\n');
+  const output = (notices ? `/*! Bundled packages\n${notices.replaceAll('*/', '* /')}\n*/\n` : '') + await build.outputs[0].text();
   postguard(output);
   return output;
 }
 
-// Reject unresolved imports, dynamic evaluation and Node-only leftovers in the bundled script.
-function postguard(output) {
-  if (Buffer.byteLength(output) > MAX_OUTPUT) throw new Error('Bundled hook is too large');
-  if (output.includes(root) || output.includes('node_modules') || /\bnode:/.test(output)) {
-    throw new Error('Bundled hook leaked a build path or Node module reference');
+// Evaluate simple feature conditions with known host globals; undefined means unknown.
+function absentValue(node, checker) {
+  if (ts.isParenthesizedExpression(node)) return absentValue(node.expression, checker);
+  if (ts.isTypeOfExpression(node) && ts.isIdentifier(node.expression)) {
+    if (checker.getSymbolAtLocation(node.expression)?.declarations?.length) return undefined;
+    if (node.expression.text === 'globalThis') return 'object';
+    if (unsupportedGlobals.has(node.expression.text)) return 'undefined';
   }
-  const parsed = ts.createSourceFile('bundle.js', output, ts.ScriptTarget.ES2020, true, ts.ScriptKind.JS);
-  const isPropertyName = node =>
-    (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
-    || (ts.isBindingElement(node.parent) && node.parent.propertyName === node)
-    || (ts.isPropertyDeclaration(node.parent) && node.parent.name === node)
-    || ((ts.isPropertyAssignment(node.parent) || ts.isMethodDeclaration(node.parent)
-      || ts.isGetAccessorDeclaration(node.parent) || ts.isSetAccessorDeclaration(node.parent))
-      && node.parent.name === node);
+  if (ts.isStringLiteral(node)) return node.text;
+  if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+  if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+  if (ts.isPrefixUnaryExpression(node) && node.operator === ts.SyntaxKind.ExclamationToken) {
+    const value = absentValue(node.operand, checker);
+    return value === undefined ? undefined : !value;
+  }
+  if (!ts.isBinaryExpression(node)) return undefined;
+  const left = absentValue(node.left, checker);
+  const right = absentValue(node.right, checker);
+  const op = node.operatorToken.kind;
+  if (op === ts.SyntaxKind.AmpersandAmpersandToken) {
+    return left === undefined ? undefined : (left ? right : left);
+  }
+  if (op === ts.SyntaxKind.BarBarToken) {
+    return left === undefined ? undefined : (left ? left : right);
+  }
+  if (left === undefined || right === undefined) return undefined;
+  if ([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken].includes(op) && typeof left !== typeof right) return undefined;
+  if ([ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.EqualsEqualsEqualsToken].includes(op)) return left === right;
+  if ([ts.SyntaxKind.ExclamationEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(op)) return left !== right;
+  if (op === ts.SyntaxKind.LessThanToken) return left < right;
+  if (op === ts.SyntaxKind.GreaterThanToken) return left > right;
+  if (op === ts.SyntaxKind.LessThanEqualsToken) return left <= right;
+  if (op === ts.SyntaxKind.GreaterThanEqualsToken) return left >= right;
+  return undefined;
+}
+
+function featureProbe(node, checker) {
+  if (ts.isTypeOfExpression(node.parent)) return true;
+  for (const child of [node, ...ancestors(node)]) {
+    const parent = child.parent;
+    if (!parent) break;
+    const condition = ts.isIfStatement(parent) ? parent.expression : ts.isConditionalExpression(parent) ? parent.condition
+      : ts.isBinaryExpression(parent) && parent.right === child ? parent.left : null;
+    const value = condition ? absentValue(condition, checker) : undefined;
+    if (value === undefined) continue;
+    if (ts.isIfStatement(parent) && (child === parent.thenStatement ? !value : child === parent.elseStatement && !!value)) return true;
+    if (ts.isConditionalExpression(parent) && (child === parent.whenTrue ? !value : child === parent.whenFalse && !!value)) return true;
+    if (ts.isBinaryExpression(parent) && parent.right === child
+        && ((parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken && !value)
+          || (parent.operatorToken.kind === ts.SyntaxKind.BarBarToken && !!value))) return true;
+  }
+  return false;
+}
+
+function* ancestors(node) {
+  for (const parent of node.parent ? [node.parent] : []) {
+    yield parent;
+    yield* ancestors(parent);
+  }
+}
+
+function scopedSource(code, name) {
+  const parsed = ts.createSourceFile(name, code, ts.ScriptTarget.Latest, true);
+  const options = { allowJs: true, noLib: true, noResolve: true };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = file => file === name ? parsed : undefined;
+  return { parsed, checker: ts.createProgram([name], options, host).getTypeChecker() };
+}
+
+function checkRuntimeLoading(contents, name) {
+  const { parsed, checker } = scopedSource(contents, name);
+  const walk = node => {
+    if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) throw new Error(`Unsupported import.meta in package file ${name}`);
+    if (ts.isCallExpression(node)) {
+      const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
+      if ((requireCall || dynamicImport) && (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0]))) {
+        const symbol = requireCall ? checker.getSymbolAtLocation(node.expression) : null;
+        if (!symbol?.declarations?.some(declaration => declaration.getSourceFile() === parsed)) {
+          throw new Error(`Unsupported runtime module loading in ${name}: use a static package dependency`);
+        }
+      }
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(parsed);
+}
+
+// Diagnose unresolved runtime loading and common absent host APIs, without banning local names or JS builtins.
+function postguard(output) {
+  if (Buffer.byteLength(output) > MAX_OUTPUT) throw new Error('Bundled hook is too large (128 KiB limit)');
+  if (output.includes(root) || output.includes(fs.realpathSync(root))) throw new Error('Bundled hook leaked a build path');
+  const { parsed, checker } = scopedSource(output, path.join(root, '__interceptor_bundle.js'));
   const walk = node => {
     if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) || ts.isExportDeclaration(node)
-        || ts.isExportAssignment(node) || node.kind === ts.SyntaxKind.ImportKeyword || ts.isMetaProperty(node)
-        || (ts.isIdentifier(node) && !isPropertyName(node) && LEFTOVER_IDENTIFIERS.has(node.text))) {
-      throw new Error(`Bundled hook contains an unresolved or unsupported reference near: ${node.getText(parsed).slice(0, 40)}`);
+        || ts.isExportAssignment(node) || node.kind === ts.SyntaxKind.ImportKeyword
+        || (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword)) {
+      throw new Error(`Bundled hook contains unresolved module loading: ${node.getText(parsed).slice(0, 60)}`);
+    }
+    if (ts.isIdentifier(node) && !isPropertyName(node) && unsupportedGlobals.has(node.text) && !featureProbe(node, checker)) {
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+      if (!symbol?.declarations?.some(declaration => declaration.getSourceFile() === parsed)) {
+        throw new Error(`Bundled hook needs unsupported runtime API ${node.text}`);
+      }
     }
     ts.forEachChild(node, walk);
   };
@@ -237,8 +368,9 @@ function legacyHostValues(source, checker, namespace) {
 
 async function compile(file, sdk, legacyHooks = [], routed = false) {
   regular(file);
-  const importNode = routed ? approvedImport(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), options.target, true)) : null;
-  const programOptions = importNode ? importOptions : options;
+  const imports = routed ? approvedImports(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), options.target, true)) : [];
+  const hasImports = imports.length > 0;
+  const programOptions = hasImports ? importOptions : options;
   const checkFile = path.join(root, '__interceptor_hook_check.ts');
   const checkText = legacyHooks.map(hook => `const __interceptorCheck_${hook}: (event: Interceptor.Event, config: Interceptor.Config) => Interceptor.Result = ${hook};`).join('\n');
   const host = ts.createCompilerHost(programOptions);
@@ -253,10 +385,9 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
       throw new Error(`${file}: only the supplied SDK reference is supported; plugins must be self-contained`);
     }
   }
-  const declaration = importNode ? dependencyFile(DEPENDENCY.declaration, DEPENDENCY.declarationSha256).real : null;
   for (const input of program.getSourceFiles()) {
     if (![file, sdk, checkFile].includes(input.fileName) && !program.isSourceFileDefaultLibrary(input)
-        && !(declaration && fs.realpathSync(input.fileName) === declaration)) {
+        && !(hasImports && isDependency(input.fileName))) {
       throw new Error(`${file}: additional TypeScript dependencies are not emitted; keep this plugin self-contained`);
     }
   }
@@ -270,20 +401,17 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
   const namespace = sdkFile.statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
   const fetchDeclaration = sdkFile.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'fetch');
   const fetchSymbol = checker.getSymbolAtLocation(fetchDeclaration.name);
-  const hashBinding = importNode
-    ? source.statements.find(ts.isImportDeclaration).importClause.namedBindings.elements[0].name : null;
-  const hashSymbol = hashBinding ? checker.getSymbolAtLocation(hashBinding) : null;
   const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
   if (!routed) legacyHostValues(source, checker, checker.getSymbolAtLocation(namespace.name));
   const routedResult = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
   const hooks = routedResult?.hooks ?? null;
   // Async code and fetch exist only inside a response.onLeave callback of a routed plugin.
   const inLeave = node => !!routedResult?.leaveRegions.some(region => node.pos >= region.pos && node.end <= region.end);
-  const isPropertyName = declaration => [ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment,
+  const isPropertyDeclaration = declaration => [ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment,
     ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.PropertySignature,
     ts.SyntaxKind.MethodSignature, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.SetAccessor].includes(declaration.kind);
   function inspect(node) {
-    if (importNode && ts.isImportDeclaration(node) && node.pos === importNode.pos && node.end === importNode.end) return;
+    if (hasImports && ts.isImportDeclaration(node)) return;
     if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) || ts.isExportDeclaration(node)
         || ts.isExportAssignment(node) || ts.isImportTypeNode(node) || node.kind === ts.SyntaxKind.ImportKeyword
         || node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)) {
@@ -300,15 +428,10 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
     if (ts.isIdentifier(node)) {
       const symbol = ts.isShorthandPropertyAssignment(node.parent)
         ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
-      if (hashSymbol && symbol === hashSymbol) {
-        if (!ts.isCallExpression(node.parent) || node.parent.expression !== node || node.parent.arguments.length !== 1) {
-          throw new Error(`${file}: sha256 must be called directly with one string; its other methods and aliases are unavailable`);
-        }
-        const argumentType = checker.getTypeAtLocation(node.parent.arguments[0]);
-        if ((argumentType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown))
-            || !checker.isTypeAssignableTo(argumentType, checker.getStringType())) {
-          throw new Error(`${file}: sha256 takes a string`);
-        }
+      if (hasImports && !isPropertyName(node) && symbol?.declarations?.length
+          && symbol.declarations.every(declaration => isDependency(declaration.getSourceFile().fileName)
+            || /lib\.(?:dom|webworker)/.test(declaration.getSourceFile().fileName))) {
+        throw new Error(`${file}: ${node.text} is a dependency-only global, not an Interceptor runtime API`);
       }
       const typeUse = ts.isTypeReferenceNode(node.parent) && node.parent.typeName === node;
       const allowedHere = inLeave(node) && ((node.text === 'Promise' && typeUse) || node.text === 'Uint8Array');
@@ -321,7 +444,7 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
           if (!inLeave(node) || !ts.isCallExpression(node.parent) || node.parent.expression !== node) {
             throw new Error(`${file}: fetch must be called directly inside a response.onLeave callback`);
           }
-        } else if (symbol?.declarations?.some(d => d.name === node && !isPropertyName(d))
+        } else if (symbol?.declarations?.some(d => d.name === node && !isPropertyDeclaration(d))
             || (ts.isBindingElement(node.parent) && node.parent.name === node)) {
           throw new Error(`${file}: fetch cannot be shadowed or redeclared`);
         }
@@ -330,17 +453,17 @@ async function compile(file, sdk, legacyHooks = [], routed = false) {
     ts.forEachChild(node, inspect);
   }
   inspect(source);
-  const diagnostics = ts.getPreEmitDiagnostics(program);
+  const diagnostics = ts.getPreEmitDiagnostics(program).filter(diagnostic => !hasImports || !diagnostic.file || !isDependency(diagnostic.file.fileName));
   if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
     getCanonicalFileName: f => f, getCurrentDirectory: () => root, getNewLine: () => '\n',
-  }));
+  }).replaceAll('npm i --save-dev', 'bun add --dev'));
   const output = {};
   const result = program.emit(source, (name, contents) => {
     if (!name.endsWith('.js') || output.code !== undefined) throw new Error('Unexpected compiler output');
     output.code = contents;
   });
   if (result.emitSkipped || output.code === undefined) throw new Error(`Compilation failed: ${file}`);
-  const code = importNode ? await bundle(output.code) : output.code;
+  const code = hasImports ? await bundle(output.code, file) : output.code;
   return { code, hooks, usesFiles: routedResult?.usesFiles ?? false };
 }
 

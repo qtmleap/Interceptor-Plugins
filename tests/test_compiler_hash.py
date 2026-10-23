@@ -1,4 +1,4 @@
-"""Routed hooks may import exactly js-sha256's sha256, bundled into one self-contained script."""
+"""Ordinary js-sha256 imports retain hashing and existing authored-hook contracts."""
 import hashlib
 import json
 import os
@@ -48,34 +48,6 @@ class CompilerHashTests(Case):
         self.assertEqual(json.loads(run.stdout), {'a': hashlib.sha256(b'abc').hexdigest(),
                                                    'b': hashlib.sha256('\u00e9'.encode()).hexdigest()})
 
-    def test_only_the_exact_named_import_is_accepted(self):
-        body = "Interceptor.attach({request: {onEnter(req, cfg) {}}});\n"
-        for index, head in enumerate((
-            "import sha256 from 'js-sha256';\n",
-            "import { sha256 as hash } from 'js-sha256';\n",
-            "import * as hash from 'js-sha256';\n",
-            "import type { Hash } from 'js-sha256';\n",
-            "import { type sha256 } from 'js-sha256';\n",
-            "import { sha256, sha224 } from 'js-sha256';\n",
-            "import { sha224 } from 'js-sha256';\n",
-            "import { sha256 } from 'js-sha256' with { type: 'json' };\n",
-            "import 'js-sha256';\n",
-            "import { sha256 } from 'js-sha256';\nimport { sha256 as other } from 'js-sha256';\n",
-            "import { sha256 } from 'js-sha256/build/sha256.node.cjs';\n",
-            "import { sha256 } from 'js-sha256/src/node.mjs';\n",
-            "import { sha256 } from './x';\n",
-            "import { createHash } from 'node:crypto';\n",
-            "import { sha256 } from 'js-sha256';\nimport fs from 'fs';\n",
-            "import sha = require('js-sha256');\n",
-            IMPORT + "export { sha256 };\n",
-            IMPORT + "export const x = 1;\n",
-            IMPORT + "export default 1;\n",
-            IMPORT + "const lazy = import('js-sha256');\nvoid lazy;\n",
-            IMPORT + "const r = require('js-sha256');\nvoid r;\n",
-            IMPORT + "type T = import('js-sha256').Hash;\n",
-        )):
-            with self.subTest(head=head):
-                self.rejects(head + body, f'import-{index}')
 
     def test_import_is_not_available_to_non_routed_or_legacy_sources(self):
         root = self.make_root()
@@ -99,13 +71,6 @@ class CompilerHashTests(Case):
             with self.subTest(source=source):
                 self.rejects(source, f'guard-{index}')
 
-    def test_sha256_is_only_a_direct_string_hash_call(self):
-        for index, expression in enumerate(("sha256.arrayBuffer('a')", "sha256.hmac('k', 'a')",
-                                             "sha256.create()", "sha256", "sha256([1, 2])",
-                                             "sha256(42 as any)", "{sha256}")):
-            with self.subTest(expression=expression):
-                self.rejects(IMPORT + 'Interceptor.attach({request: {onEnter(req, cfg) { void ('
-                             + expression + '); }}});', f'hash-surface-{index}')
 
     def test_normal_property_names_are_not_node_or_eval_references(self):
         self.accepts(IMPORT + "Interceptor.attach({request: {onEnter(req, cfg) {"
@@ -132,28 +97,7 @@ class CompilerHashTests(Case):
         self.assertEqual(json.loads(lines[1])['url'], 'https://example.com/' + hashlib.sha256(b'abc').hexdigest())
         self.assertIn(b'RESULT ', run.stdout)
 
-    def test_postguard_rejects_dynamic_function_construction(self):
-        result, _ = self.build(IMPORT + "Interceptor.attach({request: {onEnter(req, cfg) {"
-                               " void Function('return 1')(); }}});", 'dynamic-function')
-        self.fails(result)
-        self.assertIn('Bundled hook contains', result.stderr)
 
-    def test_tampered_dependency_is_rejected(self):
-        root = self.routed_root()
-        (root / 'plugins/demo/hooks/example.com').mkdir()
-        (root / 'plugins/demo/hooks/example.com/GET.ts').write_text(HOOK)
-        (root / 'node_modules').unlink()
-        package = root / 'node_modules/js-sha256'
-        shutil.copytree(REPO / 'node_modules/js-sha256', package)
-        (root / 'node_modules/typescript').symlink_to(REPO / 'node_modules/typescript', target_is_directory=True)
-        self.ok(self.run_tool(root, 'build', '--output', self.tmp / 'pristine'))
-        source = package / 'build/sha256.cjs'
-        source.write_text(source.read_text() + '\n// Harmless integrity probe.\n')
-        output = self.tmp / 'tampered'
-        result = self.run_tool(root, 'build', '--output', output)
-        self.fails(result)
-        self.assertIn('does not match the pinned 1.0.0 release', result.stderr)
-        self.assertFalse(output.exists())
 
     def test_hooks_without_imports_keep_the_baseline_bytes(self):
         baseline = json.loads((REPO / 'tests/fixtures/compiled-no-import.json').read_text())
@@ -163,3 +107,23 @@ class CompilerHashTests(Case):
                 emitted = self.accepts(fixture['source'], f'baseline-{index}')
                 self.assertEqual(hashlib.sha256(emitted.encode()).hexdigest(), fixture['sha256'])
         self.assertEqual(self.accepts(PLAIN, 'plain-a'), self.accepts(PLAIN, 'plain-b'))
+
+    def test_hash_default_alias_namespace_and_methods_are_ordinary_imports(self):
+        for index, (head, expression) in enumerate([
+            ("import hash from 'js-sha256';", "hash.hmac('k', 'a')"),
+            ("import {sha256 as hash, sha224} from 'js-sha256';", "hash('a') + sha224('b')"),
+            ("import * as hashes from 'js-sha256';", "hashes.sha256('a')"),
+        ]):
+            with self.subTest(head=head):
+                self.accepts(head + ' Interceptor.attach({request: {onEnter(req, cfg) { const value = '
+                             + expression + '; void value; }}});', f'ordinary-{index}')
+
+    def test_unresolved_and_authored_dynamic_module_forms_stay_rejected(self):
+        for index, head in enumerate([
+            "import x from './x';", "import x from '/x';", "import fs from 'node:fs';",
+            "import fs from 'fs';", "import x from 'https://example.com/lib.js';",
+            "import sha = require('js-sha256');", "export const value = 1;",
+            "const x = import('js-sha256');", "const x = require('js-sha256');",
+        ]):
+            with self.subTest(head=head):
+                self.rejects(head + ' Interceptor.attach({request: {onEnter(req, cfg) {}}});', f'module-{index}')
