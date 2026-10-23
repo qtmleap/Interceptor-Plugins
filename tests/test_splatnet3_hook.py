@@ -63,6 +63,16 @@ class SalmonHookTests(unittest.TestCase):
         self.assertEqual(summary['acquired'], ['d1', 'd2'])
         self.assertNotIn('synthetic-token', json.dumps(summary))
 
+    def test_match_scoped_player_ids_do_not_stop_later_result_saves(self):
+        import base64
+        player = lambda match: base64.b64encode(('CoopPlayer-u-123:' + match + ':u-123').encode()).decode()
+        first, second = detail('d1', player('20261023T120000_match1')), detail('d2', player('20261023T120100_match2'))
+        out = run(replies=[{'status': 200, 'body': history(['d1', 'd2'])},
+                           {'status': 200, 'body': first}, {'status': 200, 'body': second}])
+        self.assertTrue(out['ok'], out.get('code'))
+        self.assertEqual(len(out['saves']), 3)
+        self.assertEqual([json.loads(s['json']) for s in out['saves'][1:]], [first, second])
+
     def test_version_10_uses_its_own_hashes(self):
         res = response(request={'headers': {'x-web-view-ver': VERSION_10, 'accept-language': 'ja-JP'}})
         out = run(res=res, replies=[{'status': 200, 'body': history(['d1', 'd1', 'd2'])},
@@ -98,8 +108,8 @@ class SalmonHookTests(unittest.TestCase):
         self.assertEqual(len(out['requests']), 2)
         self.assertEqual(out['code'], 'recapture')
 
-    def test_detail_id_and_account_mismatch_stop_acquisition(self):
-        for body, code in [(detail('wrong'), 'id-mismatch'), (detail('d2', 'other-player'), 'principal-mismatch')]:
+    def test_detail_id_mismatch_stops_acquisition(self):
+        for body, code in [(detail('wrong'), 'id-mismatch')]:
             out = run(replies=[{'status': 200, 'body': history(['d1', 'd2', 'd3'])},
                                {'status': 200, 'body': detail('d1')}, {'status': 200, 'body': body}])
             self.assertEqual(out['code'], code)
@@ -219,12 +229,6 @@ class SalmonSaveTests(unittest.TestCase):
             out = run(replies=self.replies((status, 'not JSON')))
             self.assertEqual(out['code'], code)
             self.assertEqual(len(out['saves']), 1)
-
-    def test_later_principal_mismatch_is_not_saved(self):
-        first = self.detail_text('d1')
-        out = run(replies=self.replies((200, first), (200, detail('d2', 'other-player'))))
-        self.assertEqual(out['code'], 'principal-mismatch')
-        self.assertEqual([s['json'] for s in out['saves']], [self.HISTORY_TEXT, first])
 
     def test_invalid_history_is_not_saved(self):
         for body in ({'errors': [{'message': 'PersistedQueryNotFound'}]}, {'data': {}}, 'not JSON'):

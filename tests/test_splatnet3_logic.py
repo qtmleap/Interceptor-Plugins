@@ -132,15 +132,14 @@ class HistoryTests(unittest.TestCase):
 
 
 class DetailTests(unittest.TestCase):
-    def insp(self, status, body, eid="d1", pr=None):
-        # Explicit null is the first validated detail's principal-establishment mode.
-        args = [status, body, eid, pr]
+    def insp(self, status, body, eid="d1"):
+        args = [status, body, eid]
         return run("inspectDetail", *args)["value"]
 
     def test_valid_and_fixture(self):
-        self.assertEqual(self.insp(200, detail()), {"kind": "detail", "id": "d1", "principal": "p1"})
+        self.assertEqual(self.insp(200, detail()), {"kind": "detail", "id": "d1"})
         body = json.loads((FIX / "detail-valid.json").read_text())
-        self.assertEqual(self.insp(200, body, "synthetic-detail-1", "synthetic-player-a")["principal"], "synthetic-player-a")
+        self.assertEqual(self.insp(200, body, "synthetic-detail-1")["id"], "synthetic-detail-1")
 
     def test_http_statuses(self):
         for s in (401, 403):
@@ -179,18 +178,10 @@ class DetailTests(unittest.TestCase):
                     lambda d: d["data"]["coopHistoryDetail"]["myResult"].pop("player")):
             body = detail(); mut(body)
             self.assertEqual(self.insp(200, body)["code"], "invalid-principal")
-        self.assertEqual(self.insp(200, detail(player="p2"), "d1", "p1"), {"kind": "failure", "code": "principal-mismatch"})
-        self.assertEqual(self.insp(200, detail(player="p2"), "d1", "p2")["kind"], "detail")
-
-    def test_principal_mode_must_be_explicit(self):
-        omitted = run("inspectDetail", 200, detail(), "d1")["value"]
-        self.assertEqual(omitted, {"kind": "failure", "code": "invalid-expected"})
-        self.assertEqual(self.insp(200, detail(), "d1", None),
-                         {"kind": "detail", "id": "d1", "principal": "p1"})
+        self.assertEqual(self.insp(200, detail(player="p2"), "d1")["kind"], "detail")
 
     def test_invalid_expected(self):
         self.assertEqual(self.insp(200, detail(), ""), {"kind": "failure", "code": "invalid-expected"})
-        self.assertEqual(self.insp(200, detail(), "d1", "x" * 513)["code"], "invalid-expected")
         self.assertEqual(self.insp(200, detail(), "é" * 257)["code"], "invalid-expected")
 
     def test_outcomes_never_echo_bodies(self):
@@ -199,7 +190,7 @@ class DetailTests(unittest.TestCase):
 
     def test_unavailable_then_valid(self):
         first = self.insp(404, "gone", "d1")
-        second = self.insp(200, detail("d2", "p1"), "d2", "p1")
+        second = self.insp(200, detail("d2", "p1"), "d2")
         self.assertEqual((first["kind"], second["kind"]), ("unavailable", "detail"))
 
 

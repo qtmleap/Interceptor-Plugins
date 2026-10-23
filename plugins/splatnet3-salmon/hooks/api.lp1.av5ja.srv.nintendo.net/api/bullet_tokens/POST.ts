@@ -11,9 +11,9 @@ type LogicCode =
   | 'invalid-response' | 'graphql' | 'limit'
 type DetailCode =
   | 'recapture' | 'http' | 'query-rejected' | 'graphql' | 'invalid-response'
-  | 'id-mismatch' | 'invalid-principal' | 'principal-mismatch' | 'invalid-expected'
+  | 'id-mismatch' | 'invalid-principal' | 'invalid-expected'
 type DetailOutcome =
-  | { kind: 'detail'; id: string; principal: string }
+  | { kind: 'detail'; id: string }
   | { kind: 'unavailable' }
   | { kind: 'failure'; code: DetailCode }
 
@@ -146,18 +146,13 @@ function rejectedPersistedQuery(errors: unknown[]): boolean {
   })
 }
 
-/** Pass null only while establishing principal from the first validated detail.
- * Once established, every subsequent detail must pass that known principal.
- * Omission is rejected at runtime as well as by the TypeScript signature.
- */
+/** Player IDs are opaque and scoped to each result; validate their presence, not equality across results. */
 function inspectDetail(
   status: number,
   body: unknown,
   expectedID: string,
-  expectedPrincipal: string | null,
 ): DetailOutcome {
   if (!validIdentifier(expectedID)) return failure('invalid-expected')
-  if (expectedPrincipal !== null && !validIdentifier(expectedPrincipal)) return failure('invalid-expected')
   if (status === 401 || status === 403) return failure('recapture')
   if (status === 404) return { kind: 'unavailable' }
   if (!Number.isInteger(status) || status < 200 || status > 299) return failure('http')
@@ -172,8 +167,7 @@ function inspectDetail(
   if (detail.id !== expectedID) return failure('id-mismatch')
   const player = isObject(detail.myResult) && isObject(detail.myResult.player) ? detail.myResult.player : undefined
   if (!player || !validIdentifier(player.id)) return failure('invalid-principal')
-  if (expectedPrincipal !== null && player.id !== expectedPrincipal) return failure('principal-mismatch')
-  return { kind: 'detail', id: detail.id, principal: player.id }
+  return { kind: 'detail', id: detail.id }
 }
 
 // Query IDs are pinned to the captured web-view version; provenance: docs/development/splatnet3-queries.json.
@@ -227,7 +221,6 @@ Interceptor.attach({
       await Interceptor.saveJSON(HISTORY_KEY, historyText)
       const acquired: string[] = []
       const unavailable: string[] = []
-      let principal: string | null = null
       for (const id of ids.slice(0, limit)) {
         const reply = await fetch(endpoint, {
           method: 'POST', headers: requestHeaders, body: JSON.stringify(makeDetailQuery(pair, id)),
@@ -238,10 +231,9 @@ Interceptor.attach({
         if (!reply.ok) throw new Error('http')
         const text = await reply.text()
         const data = parseText(text)
-        const checked = inspectDetail(reply.status, data, id, principal)
+        const checked = inspectDetail(reply.status, data, id)
         if (checked.kind === 'failure') throw new Error(checked.code)
         if (checked.kind === 'unavailable') { unavailable.push(id); continue }
-        principal = checked.principal
         // Save the validated response text as received; a failed save stops the chain.
         await Interceptor.saveJSON(detailKey(id), text)
         acquired.push(id)

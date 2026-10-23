@@ -14,13 +14,15 @@ sending API is added.
 Supported subset: public HTTPS443 GET/POST/PUT with strict JSON request bodies
 (up to8KiB), no URL query/redirect/stream/compressed response or automatic cookie.
 Response.status/ok/bodyUsed/text()/json() are available; read the body once.
-Limits:8MiB JS heap,250ms CPU excluding trusted transport wait,120sec wall,
+Limits:8MiB JS heap,250ms cumulative CPU for fetch-only or1000ms with a files
+grant and trusted save callback (host wait excluded),120sec wall,
 64requests,1MiB per response and16MiB aggregate; two concurrent fetch VMs.
 
 repository-config.json pins the shared native source used by the simulator.
 `run-package-fetch` uses that exact C bridge and an offline request/response
 fixture protocol. Generated-Salmon-Plugin fixtures establish request order,
 JSON bodies, filtering and errors; native transport tests use an owned TLS
-origin. Neither establishes current Nintendo acceptance, which needs a real
-captured token and device/service verification. Raw results remain in JS only;
-external upload and persistence are deferred.
+origin. Those checks alone do not establish Nintendo acceptance; that needs real
+captured-token and device/service verification. M3 verification confirmed actual
+history and detail response JSON saving. Interceptor.saveJSON stores the original
+JSON text with the write.files grant; external upload remains deferred.

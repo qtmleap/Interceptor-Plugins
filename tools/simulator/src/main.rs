@@ -28,8 +28,9 @@ const LIMITS: Limits = Limits {
     max_result_depth: 32,
     max_actions: 2,
 };
+// The C bridge keeps ungranted/fetch-only invocations capped at 250 ms.
 const FETCH_LIMITS: Limits = Limits {
-    deadline_ms: 250,
+    deadline_ms: 1000,
     ..LIMITS
 };
 #[repr(C)]
