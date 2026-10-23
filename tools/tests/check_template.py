@@ -19,7 +19,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="interceptor-template-") as directory:
         root = Path(directory)
         ignore = shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc")
-        for name in (".github", ".devcontainer", ".vscode", "tools", "tests", "plugins", "src", "scripts", "types", "manifests", "fixtures", "website"):
+        for name in (".github", ".devcontainer", ".vscode", "tools", "tests", "plugins", "src", "scripts", "types", "manifests", "fixtures", "website", "docs"):
             if name in ("plugins", "src", "scripts", "manifests") and not (args.root / name).exists():
                 continue
             shutil.copytree(args.root / name, root / name, ignore=ignore)

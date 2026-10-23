@@ -1,0 +1,61 @@
+{
+  "versions": {
+    "4.0.0-091d4283": {
+      "history": "0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f",
+      "detail": "824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602"
+    },
+    "10.0.0-d15503c4": {
+      "history": "e11a8cf2c3de7348495dea5cdcaa25e0c153541c4ed63f044b6c174bc5b703df",
+      "detail": "f2d55873a9281213ae27edc171e2b19131b3021a2ae263757543cdd3bf015cc8"
+    }
+  },
+  "sources": {
+    "publicBundle10": {
+      "url": "https://api.lp1.av5ja.srv.nintendo.net/static/js/main.8f32ce85.js",
+      "sha256": "2ca57e2076efafc81a8a516eec606275ee0f307eb8f11796b9dad18acd35901d",
+      "appFullVersion": "10.0.0-d15503c4",
+      "appRevision": "d15503c46ed2e426fb3f57972d5f8c9707dcc53e",
+      "note": "Nintendo public web bundle read from a local copy on the native host; its sha256 was recomputed and matches. Persisted-query params.id/name pairs: CoopHistoryQuery e11a8cf2..., CoopHistoryDetailQuery f2d55873.... The detail variable coopHistoryDetailId and alias coopHistoryDetail were verified by Codex, not re-derived here. History matched a real NSO 200 capture with x-web-view-ver 10.0.0-d15503c4; detail was not exercised because the account has empty history.",
+      "realCommunication": {
+        "date": "2026-10-23",
+        "nativeRevision": "30b71641fdc145cc424d44a0976c6eff9c54f407",
+        "boundary": "Physical-device hosted test replays a captured real BulletToken response through the generated Plugin, QuickJS fetch and HTTPPluginDirectTransport. Does not cover automatic installed-Plugin activation.",
+        "history": "HTTP 200, validated response, zero history entries.",
+        "detail": "Not exercised: no history entries."
+      }
+    },
+    "protocol": {
+      "repository": "https://github.com/samuelthomas2774/nxapi",
+      "revision": "47c9d35d9d51d33e62dd6d3733b616e0ad31b02b",
+      "note": "Protocol facts: bullet-token POST201, GraphQL persisted-query POST, Bearer authorization, x-web-view-ver, accept-language and X-Requested-With: XMLHttpRequest (src/api/splatnet3.ts lines112-121). No third-party implementation code copied.",
+      "url": "https://github.com/samuelthomas2774/nxapi/blob/47c9d35d9d51d33e62dd6d3733b616e0ad31b02b/src/api/splatnet3.ts",
+      "sha256": "a256255766f29071f284264a964954669107f9d0b9711a2cea2d829cc391356b"
+    },
+    "queryMapping": {
+      "repository": "https://github.com/nintendoapis/splatnet3-types",
+      "commit": "f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf",
+      "appFullVersion": "4.0.0-091d4283",
+      "appRevision": "091d428399dc86fd3a7fc43d64bd33b8bd1e875d",
+      "note": "Source mapping only; not verified current-production support.",
+      "files": [
+        {
+          "url": "https://github.com/nintendoapis/splatnet3-types/blob/f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf/src/generated/named/CoopHistoryQuery.ts",
+          "sha256": "864d334fc3b7ea02146a4e73455ca5274822ba0277a1b0774a5858b9a3d11e46"
+        },
+        {
+          "url": "https://github.com/nintendoapis/splatnet3-types/blob/f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf/src/generated/named/CoopHistoryDetailQuery.ts",
+          "sha256": "7ac442821890c113f3a70bdeea48fc128463ba37b8ab105e7e73bb255b5d34aa"
+        }
+      ]
+    },
+    "bulletTokenResponse": {
+      "url": "https://github.com/samuelthomas2774/nxapi/blob/47c9d35d9d51d33e62dd6d3733b616e0ad31b02b/src/api/splatnet3-types.ts",
+      "revision": "47c9d35d9d51d33e62dd6d3733b616e0ad31b02b",
+      "fields": [
+        "bulletToken",
+        "lang"
+      ],
+      "note": "BulletToken response type; use the issued lang or captured Accept-Language, never guess a language."
+    }
+  }
+}

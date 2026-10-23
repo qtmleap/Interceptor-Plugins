@@ -12,19 +12,19 @@ DockerとVS Code、Dev Containers拡張機能を用意し、Dockerを起動し�
 `plugins/NAME/hooks/{host}/{path}/{METHOD}.ts`に処理を書き、次のコマンドで生成・検証します。ファイルの構成とHookの例は[プラグインを書く](authoring.md)を参照してください。
 
 ```sh
-bun run build:dev
+bun run build
 bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
 bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 bun run check:authoring
 ```
 
-`build:dev`は未署名のパッケージを`build/dev/plugins/`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
+`build`は未署名のパッケージを`build/dev/plugins/`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
 
 シミュレーターの`check`は生成されたJavaScriptの構文を、`run-package`はパッケージ内のHookの実行結果を確認します。
 
-VS Codeでは各HookファイルにSDKの型が適用され、JavaScriptは出力されません。ビルド用と検証用のタスクも選べます。ファイルの配置や使える構文の最終確認には`build:dev`と`check:authoring`を使います。
+VS Codeでは各HookファイルにSDKの型が適用され、JavaScriptは出力されません。ビルド用と検証用のタスクも選べます。ファイルの配置や使える構文の最終確認には`build`と`check:authoring`を使います。
 
-`bun run check`は署名と改ざん検出も検証します。テストには一時的な鍵を使うので、GitHubの認証情報や公開用の署名鍵は不要です。従来の`bun run build`も使えますが、出力先の`build/site/`は存在しないか空である必要があります。
+`bun run check`は署名と改ざん検出も検証します。テストには一時的な鍵を使うので、GitHubの認証情報や公開用の署名鍵は不要です。`build:dev`は互換用の別名として残しています。
 
 新しいリポジトリの署名鍵・GitHub Environment・Pagesを設定するときは、コンテナ内で `gh auth login` を済ませてから `bun run setup` を実行します。手順は[公開](publishing.md)を参照してください。
 

@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import ts from 'typescript';
 
 const root = path.resolve(process.argv[2] || '.');
+// Promise (as a type) and Uint8Array (createFile contents) are allowed only inside response.onLeave callbacks.
 const forbidden = new Set(['Promise', 'ArrayBuffer', 'SharedArrayBuffer', 'DataView', 'Atomics',
   'Int8Array', 'Uint8Array', 'Uint8ClampedArray', 'Int16Array', 'Uint16Array', 'Int32Array',
   'Uint32Array', 'Float32Array', 'Float64Array', 'BigInt64Array', 'BigUint64Array']);
@@ -25,17 +26,28 @@ const isAttach = node => ts.isCallExpression(node) && ts.isPropertyAccessExpress
 const isSend = node => ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)
   && ts.isIdentifier(node.expression.expression) && node.expression.expression.text === 'Interceptor'
   && node.expression.name.text === 'send';
+// Any `Interceptor.createFile` property access, whether or not it is a direct call.
+const isCreateAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+  && node.expression.text === 'Interceptor' && node.name.text === 'createFile';
+// Any `Interceptor.Storage` value access; only `Interceptor.Storage.<case>` is accepted.
+const isStorageAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
+  && node.expression.text === 'Interceptor' && node.name.text === 'Storage';
+const STORAGE_CASES = ['local', 'iCloudDrive'];
 
 function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
   const sends = [];
+  const saves = [];
+  const storages = [];
   const references = [];
   const walk = (node, parent) => {
     if (isAttach(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) calls.push(node);
     if (isSend(node) && checker.getSymbolAtLocation(node.expression.expression) === namespace) sends.push(node);
+    if (isCreateAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) saves.push({ access: node, parent });
+    if (isStorageAccess(node) && checker.getSymbolAtLocation(node.expression) === namespace) storages.push({ access: node, parent });
     if ((ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
         && ts.isIdentifier(node.expression) && node.expression.text === 'Interceptor'
-        && (ts.isElementAccessExpression(node) || ['attach', 'send'].includes(node.name.text))
+        && (ts.isElementAccessExpression(node) || ['attach', 'send', 'createFile', 'Storage'].includes(node.name.text))
         && checker.getSymbolAtLocation(node.expression) !== namespace) {
       throw new Error(`${source.fileName}: Interceptor host calls cannot use a shadowed name`);
     }
@@ -52,7 +64,8 @@ function staticHooks(source, checker, namespace, globalObject) {
     throw new Error(`${source.fileName}: use one direct top-level Interceptor.attach({ ... })`);
   }
   const call = calls[0];
-  const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression)]);
+  const directReferences = new Set([call.expression.expression, ...sends.map(send => send.expression.expression),
+    ...saves.map(save => save.access.expression), ...storages.map(storage => storage.access.expression)]);
   if (references.some(node => !directReferences.has(node))) {
     throw new Error(`${source.fileName}: Interceptor host calls cannot be aliased or called indirectly`);
   }
@@ -74,6 +87,7 @@ function staticHooks(source, checker, namespace, globalObject) {
   }
   const hooks = {};
   const callbackBodies = [];
+  const leaveRegions = [];
   for (const [leg, property] of entries(call.arguments[0], ['request', 'response'])) {
     if (!ts.isPropertyAssignment(property) || !ts.isObjectLiteralExpression(property.initializer)) {
       throw new Error(`${source.fileName}: ${leg} must be a static hooks object`);
@@ -84,6 +98,7 @@ function staticHooks(source, checker, namespace, globalObject) {
       const fn = ts.isMethodDeclaration(callback) ? callback : callback.initializer;
       if (fn && (ts.isMethodDeclaration(fn) || ts.isFunctionExpression(fn) || ts.isArrowFunction(fn)) && fn.body) {
         callbackBodies.push(fn.body);
+        if (leg === 'response' && phase === 'onLeave') leaveRegions.push(fn);
       }
     }
     if (!Object.keys(hooks[leg]).length) throw new Error(`${source.fileName}: empty ${leg} hooks`);
@@ -94,7 +109,20 @@ function staticHooks(source, checker, namespace, globalObject) {
       throw new Error(`${source.fileName}: Interceptor.send is available only inside a registered callback`);
     }
   }
-  return hooks;
+  // createFile must be a direct call to the property inside a registered response.onLeave callback.
+  for (const { access, parent } of saves) {
+    if (!ts.isCallExpression(parent) || parent.expression !== access
+        || !leaveRegions.some(region => access.pos >= region.pos && access.end <= region.end)) {
+      throw new Error(`${source.fileName}: Interceptor.createFile must be called directly inside a registered response.onLeave callback`);
+    }
+  }
+  // Storage is read only as Interceptor.Storage.<case>, never copied, destructured or aliased.
+  for (const { access, parent } of storages) {
+    if (!ts.isPropertyAccessExpression(parent) || parent.expression !== access || !STORAGE_CASES.includes(parent.name.text)) {
+      throw new Error(`${source.fileName}: use Interceptor.Storage only as Interceptor.Storage.local or Interceptor.Storage.iCloudDrive`);
+    }
+  }
+  return { hooks, leaveRegions, usesFiles: saves.length > 0 };
 }
 
 function legacyHostValues(source, checker, namespace) {
@@ -137,20 +165,55 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
       throw new Error(`${file}: declare a top-level function ${hook} for its manifest subscriptions`);
     }
   }
+  const checker = program.getTypeChecker();
+  const sdkFile = program.getSourceFile(sdk);
+  const namespace = sdkFile.statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
+  const fetchDeclaration = sdkFile.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'fetch');
+  const fetchSymbol = checker.getSymbolAtLocation(fetchDeclaration.name);
+  const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
+  if (!routed) legacyHostValues(source, checker, checker.getSymbolAtLocation(namespace.name));
+  const routedResult = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
+  const hooks = routedResult?.hooks ?? null;
+  // Async code and fetch exist only inside a response.onLeave callback of a routed plugin.
+  const inLeave = node => !!routedResult?.leaveRegions.some(region => node.pos >= region.pos && node.end <= region.end);
+  const isPropertyName = declaration => [ts.SyntaxKind.PropertyAssignment, ts.SyntaxKind.ShorthandPropertyAssignment,
+    ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.PropertySignature,
+    ts.SyntaxKind.MethodSignature, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.SetAccessor].includes(declaration.kind);
   function inspect(node) {
     if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) || ts.isExportDeclaration(node)
         || ts.isExportAssignment(node) || ts.isImportTypeNode(node) || node.kind === ts.SyntaxKind.ImportKeyword
-        || node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword || m.kind === ts.SyntaxKind.AsyncKeyword)
-        || ts.isAwaitExpression(node)) throw new Error(`${file}: imports, exports and asynchronous code are unavailable in this host`);
-    if (ts.isIdentifier(node) && forbidden.has(node.text)) throw new Error(`${file}: ${node.text} is unavailable in this host`);
+        || node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)) {
+      throw new Error(`${file}: imports, exports and asynchronous code are unavailable in this host`);
+    }
+    const asyncModifier = node.modifiers?.some(m => m.kind === ts.SyntaxKind.AsyncKeyword);
+    const generator = (ts.isFunctionLike(node) && node.asteriskToken) || (ts.isForOfStatement(node) && node.awaitModifier);
+    if ((asyncModifier || ts.isAwaitExpression(node)) && !inLeave(node)) {
+      throw new Error(`${file}: imports, exports and asynchronous code are unavailable in this host`);
+    }
+    if (asyncModifier && generator || (ts.isForOfStatement(node) && node.awaitModifier)) {
+      throw new Error(`${file}: async generators and for await are unavailable in this host`);
+    }
+    if (ts.isIdentifier(node)) {
+      const typeUse = ts.isTypeReferenceNode(node.parent) && node.parent.typeName === node;
+      const allowedHere = inLeave(node) && ((node.text === 'Promise' && typeUse) || node.text === 'Uint8Array');
+      if (forbidden.has(node.text) && !allowedHere) {
+        throw new Error(`${file}: ${node.text} is unavailable in this host`);
+      }
+      if (node.text === 'fetch' && !ts.isTypeReferenceNode(node.parent)) {
+        const symbol = ts.isShorthandPropertyAssignment(node.parent) ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+        if (symbol === fetchSymbol) {
+          if (!inLeave(node) || !ts.isCallExpression(node.parent) || node.parent.expression !== node) {
+            throw new Error(`${file}: fetch must be called directly inside a response.onLeave callback`);
+          }
+        } else if (symbol?.declarations?.some(d => d.name === node && !isPropertyName(d))
+            || (ts.isBindingElement(node.parent) && node.parent.name === node)) {
+          throw new Error(`${file}: fetch cannot be shadowed or redeclared`);
+        }
+      }
+    }
     ts.forEachChild(node, inspect);
   }
   inspect(source);
-  const checker = program.getTypeChecker();
-  const namespace = program.getSourceFile(sdk).statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
-  const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
-  if (!routed) legacyHostValues(source, checker, checker.getSymbolAtLocation(namespace.name));
-  const hooks = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
   const diagnostics = ts.getPreEmitDiagnostics(program);
   if (diagnostics.length) throw new Error(ts.formatDiagnosticsWithColorAndContext(diagnostics, {
     getCanonicalFileName: f => f, getCurrentDirectory: () => root, getNewLine: () => '\n',
@@ -161,7 +224,7 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     output.code = contents;
   });
   if (result.emitSkipped || output.code === undefined) throw new Error(`Compilation failed: ${file}`);
-  return { code: output.code, hooks };
+  return { code: output.code, hooks, usesFiles: routedResult?.usesFiles ?? false };
 }
 
 try {
@@ -191,6 +254,9 @@ try {
       const sourceFiles = {};
       const matches = plugin.routes.map(route => {
         const result = compile(path.join(root, 'plugins', name, route.file), sdk, [], true);
+        if (result.usesFiles && plugin.metadata.write?.files !== true) {
+          throw new Error(`plugins/${name}/${route.file}: Interceptor.createFile requires write.files: true in plugin.json`);
+        }
         sourceFiles[route.emitted] = result.code;
         const hooks = Object.fromEntries(Object.entries(result.hooks).map(([leg, callbacks]) =>
           [leg, Object.fromEntries(Object.keys(callbacks).map(phase => [phase, route.emitted]))]));

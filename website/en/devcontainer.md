@@ -12,19 +12,19 @@ Install Docker, VS Code and the Dev Containers extension, then start Docker. Ope
 Write hooks in `plugins/NAME/hooks/{host}/{path}/{METHOD}.ts`, then generate and validate them with the commands below. See [Authoring](authoring.md) for the layout and callback examples.
 
 ```sh
-bun run build:dev
+bun run build
 bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
 bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 bun run check:authoring
 ```
 
-`build:dev` generates unsigned packages in `build/dev/plugins/`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
+`build` generates unsigned packages in `build/dev/plugins/`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
 
 The simulator's `check` command checks the generated JavaScript's syntax; `run-package` checks a hook from the package for the supplied input.
 
-VS Code applies the SDK types independently to each hook file without emitting JavaScript. Build and authoring-check tasks are also available. Use `build:dev` and `check:authoring` to validate file locations and the allowed syntax.
+VS Code applies the SDK types independently to each hook file without emitting JavaScript. Build and authoring-check tasks are also available. Use `build` and `check:authoring` to validate file locations and the allowed syntax.
 
-`bun run check` also covers signing and tamper rejection. It uses temporary test keys and needs no GitHub credentials or production key. The existing `bun run build` remains available; its `build/site/` output must be absent or empty.
+`bun run check` also covers signing and tamper rejection. It uses temporary test keys and needs no GitHub credentials or production key. `build:dev` remains a compatibility alias for `build`.
 
 To initialize your own signed repository, sign in with `gh auth login` inside the container, then run `bun run setup`. See [Publishing](publishing.md).
 

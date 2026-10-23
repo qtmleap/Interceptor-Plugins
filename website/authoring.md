@@ -126,14 +126,14 @@ Interceptor.attach({
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
-bun run build:dev
+bun run build
 bun run check:authoring
 bun run check
 ```
 
-`build:dev`は未署名のパッケージを`build/dev/plugins/NAME.json`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
+`build`は未署名のパッケージを`build/dev/plugins/NAME.json`に生成します。ソースを変更するたびに再実行できます。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。
 
-`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。従来の`bun run build`は`build/site/`に生成し、出力先が存在しないか空であることを求めます。
+`check:authoring`は型チェック、ツールのテスト、パッケージ生成を検証します。`check`はさらに`fixtures/cases.json`の実行結果、署名、改ざん検出などを検証します。`build:dev`は互換用の別名として残しています。
 
 VS CodeではSDKの型で各Hookファイルをチェックし、JavaScriptは出力しません。ビルド用と検証用のタスクも選べます。ファイルの配置や使える構文は、ビルド時にも確認します。
 

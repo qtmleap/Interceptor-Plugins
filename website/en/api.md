@@ -140,6 +140,44 @@ Interceptor.attach({
 
 Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver the returned Webhook actions.
 
+## fetch {#fetch}
+
+Call standard global `fetch` inside an async `response.onLeave` callback and await
+its response. Define the URL, method, headers and body in JS; no duplicate
+`outbound` destination declaration is required.
+
+Supported requests are GET/POST/PUT to public HTTPS hosts on port443 with JSON
+request bodies. Query strings, redirects, streaming, compressed responses and
+automatic cookies are unsupported. Responses expose `status`, `ok`, `bodyUsed`,
+`text()` and `json()`; the body can be consumed once. Put async helper functions
+inside `response.onLeave`. A fetching hook runs after forwarding, while existing
+synchronous hooks retain their behavior.
+
+Request bodies are limited to8KiB, responses to1MiB, and each invocation to
+64requests and16MiB of response data. Runtime, concurrency and cancellation
+limits also apply. Revocation or tunnel shutdown cancels pending work.
+The existing synthetic-test screen sends no network traffic; use the offline
+`interceptor-simulator run-package-fetch` fixture protocol for response tests.
+
+## Interceptor.createFile {#create-file}
+
+`await Interceptor.createFile({ storage, atPath, contents })` creates a file at `atPath` in the plugin's own
+`storage` and returns `Promise<void>`. `storage` is `Interceptor.Storage.local` (`'local'`) or
+`Interceptor.Storage.iCloudDrive` (`'icloud'`); a raw string literal is a type error. `atPath` is a relative path
+from that storage's virtual root (for example `'Salmon Run/history.json'`). `contents` is a string (written as UTF-8) or a
+`Uint8Array` (written byte for byte) and may be empty. `Uint8Array` is available only inside `response.onLeave`;
+other typed arrays, `ArrayBuffer`, `SharedArrayBuffer`, `DataView` and `Atomics` stay unavailable.
+It requires `write.files: true` in the manifest (optional, default `false`; schema 1 rejects it). Call it
+directly, not aliased or through `globalThis`, inside a `response.onLeave` callback and await it, and read
+storage cases directly as `Interceptor.Storage.iCloudDrive`. The build accepts only direct calls. A failed write
+rejects the promise; runtime enforcement remains the host's responsibility.
+The Promise resolves after a durable private commit. Interceptor exports files while foreground; iCloud Drive
+needs a user-authorized folder. The Promise does not wait for Apple's server upload. Contents are preserved
+as supplied; this API does not parse JSON.
+When the folder picker grants `iCloud Drive/Salmon Run`, keep the JS path `Salmon Run/history.json`.
+Interceptor maps that grant to the exact `Salmon Run/` prefix and removes it once when publishing, so
+`history.json` appears directly inside the selected folder, without another nested `Salmon Run` directory.
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })` requests a GET to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
@@ -189,7 +227,7 @@ Keep the plugin UUID `id` after publication and increment `version` for changes.
 - `queryKeys`: readable query keys.
 - `body.mode`: `none` omits the body; `json` exposes parsed JSON.
 
-`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Method, URL, headers and status cannot be changed.
+`write.requestBody` and `write.responseBody` allow JSON edits in the respective `onEnter`. Optional `write.files` (default `false`) allows `Interceptor.createFile`. Method, URL, headers and status cannot be changed.
 
 `endpointBindings` is required and lists names used to construct webhook-shaped actions in synthetic tests; use `[]` when no names are needed. Synthetic tests may supply a test ID through `cfg.endpoints.preview`. Live processing supplies no endpoint IDs, so the examples return without an action when the ID is absent. Matching already checks the host and method. Settings are available as `cfg.settings`.
 
@@ -205,7 +243,7 @@ Upgrade requests and nested CONNECT requests within a decrypted connection recei
 
 The app's shared processor runs one hook phase at a time, with at most eight waiting. An overloaded `onEnter` forwards the original traffic. Each connection allows at most four in-flight `onLeave` notifications; excess notifications are dropped while forwarding continues. Notification execution is not guaranteed.
 
-Script errors and timeouts forward the original traffic. Revoked capture consent or plugin approval closes the connection. Execution is synchronous: no `fetch`, promises, timers, files, Node APIs or browser APIs.
+Script errors and timeouts forward the original traffic. Revoked capture consent or plugin approval closes the connection. Only `response.onLeave` supports asynchronous `fetch`; other hooks remain synchronous. Timers, files, Node APIs and other browser APIs are unavailable.
 
 Per invocation: 50 ms, 8 MiB heap, 128 KiB total plugin source, 64 KiB event, 8 KiB config, 32 KiB result and at most two actions.
 

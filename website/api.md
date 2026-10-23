@@ -144,6 +144,50 @@ Interceptor.attach({
 
 このHookで本文を変更しようとするとエラーになります。合成テストでは渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では戻り値のWebhook形式のアクションを保存・送信しません。
 
+## fetch {#fetch}
+
+`response.onLeave`から標準の`fetch`を呼び、応答を`await`できます。
+URL・メソッド・ヘッダー・本文はJS内に記述します。送信先をmanifestの`outbound`へ重ねて宣言する必要はありません。
+
+```ts
+Interceptor.attach({
+  response: {
+    async onLeave(res) {
+      const response = await fetch('https://api.example.com/results', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ result: res.body })
+      });
+      if (!response.ok) throw new Error('request failed');
+      const result = await response.json();
+    }
+  }
+});
+```
+
+この実装はHTTPSの公開ホスト・443番ポートへのGET/POST/PUTとJSON本文に対応します。
+クエリ文字列、リダイレクト、ストリーミング、圧縮応答、自動Cookieは扱いません。
+応答の`status`・`ok`・`bodyUsed`を確認し、`text()`または`json()`で本文を1回だけ読み取れます。
+`fetch`を使うHookは、元の転送を待たせず後続実行します。既存の同期Hookは従来どおりです。
+非同期の補助関数は`response.onLeave`内に置きます。
+
+本文は8KiB、応答は1MiB、1回のHookは64リクエスト・累計16MiBまでです。
+処理時間と並列数にも上限があり、承認の取り消しやトンネル終了でキャンセルします。
+既存の合成テスト画面はネットワークを実行しません。オフラインの応答を使う検証には
+`interceptor-simulator run-package-fetch`を使います。
+
+## Interceptor.createFile {#create-file}
+
+`await Interceptor.createFile({ storage, atPath, contents })`は、Plugin専用の保存先`storage`の`atPath`にファイルを作成します（`Promise<void>`）。
+`storage`は`Interceptor.Storage.local`（`'local'`）または`Interceptor.Storage.iCloudDrive`（`'icloud'`）で、文字列リテラルは型エラーになります。
+`atPath`は`storage`の仮想ルートからの相対パス（例：`'Salmon Run/history.json'`）、`contents`は文字列（UTF-8）または`Uint8Array`（バイト列のまま）で、空でも構いません。
+`Uint8Array`は`response.onLeave`内でのみ使えます。他の`ArrayBuffer`、`SharedArrayBuffer`、`DataView`、`Atomics`と他の型付き配列は使えません。
+manifestの`write.files`を`true`にした場合だけ使えます（省略時は`false`。スキーマ1では指定できません）。
+`response.onLeave`コールバック内で、別名や`globalThis`を経由せず直接呼び、必ず`await`してください。`Interceptor.Storage`は`Interceptor.Storage.iCloudDrive`のように直接参照します。ビルドは直接呼び出しだけを受け付けます。
+書き込みに失敗するとPromiseは拒否されます。実行時の検証はホストの責任です。
+Promiseの解決は本体内への永続保存の完了を意味します。Interceptorを開いている間に保存先へ書き出し、iCloud Driveには初回のフォルダアクセス許可が必要です。OSによるiCloudへのアップロード完了は、このPromiseでは待ちません。JSONの解析は行わず、元の内容を保存します。
+フォルダ選択画面でiCloud Drive内の「Salmon Run」を許可した場合も、JSの`atPath`は`Salmon Run/history.json`のままです。本体が許可したフォルダに対応する`Salmon Run/`を一度だけ取り除き、そのフォルダ直下に`history.json`を書き出します。`Salmon Run/Salmon Run/`にはなりません。
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })`は、manifestの`outbound`に宣言した別のAPIへGETリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
@@ -193,7 +237,7 @@ Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 - `queryKeys`: 読み取るクエリキー
 - `body.mode`: `none`は本文を渡さず、`json`はJSON本文を渡す
 
-`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
+`write.requestBody`と`write.responseBody`は対応する`onEnter`でJSONを変更する権限です。`write.files`（省略可、既定`false`）は`Interceptor.createFile`の利用権限です。メソッド、URL、ヘッダー、ステータスは変更できません。権限のない値を読み取る前提でコードを書かないでください。
 
 `endpointBindings`は、合成テストでWebhook形式のアクションを作るときに使う名前の配列です。使わない場合も`[]`を記載します。テストでは`cfg.endpoints.preview`などにテスト用IDを指定します。実通信ではエンドポイントIDを渡さないため、例ではIDがない場合にアクションを返さず終了します。ホストやメソッドの確認は対象条件で行います。`settings`は`cfg.settings`で参照します。
 
@@ -209,7 +253,7 @@ Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 
 アプリの共通プロセッサーはHookを1つずつ実行し、待機は最大8件です。上限を超えた`onEnter`は元の通信内容を転送します。処理が完了していない`onLeave`の通知は接続ごとに最大4件です。超過分は転送を止めずに省略します。通知の実行は保証されません。
 
-スクリプトの例外や時間制限超過では元の通信内容を転送します。通信の取得への同意やプラグインの承認を利用者が取り消した場合は接続を終了します。実行は同期式で、`fetch`、Promise、タイマー、ファイル操作、NodeやブラウザのAPIは使えません。
+スクリプトの例外や時間制限超過では元の通信内容を転送します。通信の取得への同意やプラグインの承認を利用者が取り消した場合は接続を終了します。`response.onLeave`の`fetch`だけは非同期に実行できます。それ以外のHookは同期式です。タイマー、ファイル操作、Nodeやその他のブラウザAPIは使えません。
 
 1回の実行は50 ms、ヒープ8 MiB、プラグイン内のソース合計128 KiB、入力64 KiB、設定8 KiB、結果32 KiBまでです。返せるアクションは最大2件です。
 

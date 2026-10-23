@@ -1,0 +1,4 @@
+{"data":{"coopResult":{"historyGroups":{"nodes":[
+ {"historyDetails":{"nodes":[{"id":"synthetic-detail-1"},{"id":"synthetic-detail-2"}]}},
+ {"historyDetails":{"nodes":[{"id":"synthetic-detail-2"},{"id":"synthetic-detail-3"}]}}]},
+ "historyGroupsOnlyFirst":{"nodes":[{"historyDetails":{"nodes":[{"id":"synthetic-detail-1"},{"id":"synthetic-detail-4"}]}}]}}}}

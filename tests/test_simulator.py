@@ -90,12 +90,20 @@ class SimulatorTests(unittest.TestCase):
         def product(text):
             return math.prod(int(part.strip().replace('_', '')) for part in text.split('*'))
         native = {key: product(value) for key, value in re.findall(r'public static let (\w+) = ([0-9_ *]+)', app)}
-        actual = {key: product(value) for key, value in re.findall(r'\b(\w+):\s*([0-9_]+(?:\s*\*\s*[0-9_]+)*)\s*[,}]', rust)}
+        # Compare the synchronous entry's limits; fetch has a separate CPU budget.
+        sync_limits = re.search(r'const LIMITS: Limits = Limits \{(.*?)\};', rust, re.S).group(1)
+        actual = {key: product(value) for key, value in re.findall(r'\b(\w+):\s*([0-9_]+(?:\s*\*\s*[0-9_]+)*)\s*[,}]', sync_limits)}
         fields = {'deadlineMilliseconds':'deadline_ms','heapBytes':'heap_bytes','stackBytes':'stack_bytes',
                   'maxSourceBytes':'max_source_bytes','maxEventBytes':'max_event_bytes','maxConfigBytes':'max_config_bytes',
                   'maxResultBytes':'max_result_bytes','maxResultDepth':'max_result_depth','maxActions':'max_actions'}
         for native_key, rust_key in fields.items():
             self.assertEqual(native[native_key], actual[rust_key], native_key)
+        fetch_app = (package / 'Sources/AutomationRuntime/JavaScriptFetchExecutor.swift').read_text()
+        # run-package-fetch calls the files-capable bridge; C retains the smaller ungranted cap.
+        fetch_native = int(re.search(r'static let filesCpuDeadlineMilliseconds = (\d+)', fetch_app).group(1))
+        fetch_rust = re.search(r'const FETCH_LIMITS: Limits = Limits \{(.*?)\};', rust, re.S).group(1)
+        self.assertIn('..LIMITS', fetch_rust)
+        self.assertEqual(fetch_native, int(re.search(r'deadline_ms:\s*(\d+)', fetch_rust).group(1)))
         manifest = (package / 'Package.swift').read_text()
         build = (ROOT / 'tools/simulator/build.rs').read_text()
         for flag in ('-fwrapv', '-funsigned-char'):
