@@ -1,6 +1,6 @@
 use std::ffi::CString;
 use std::fs::{File, OpenOptions};
-use std::io::{Read, Write};
+use std::io::{BufReader, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -27,6 +27,10 @@ const LIMITS: Limits = Limits {
     max_result_bytes: 32768,
     max_result_depth: 32,
     max_actions: 2,
+};
+const FETCH_LIMITS: Limits = Limits {
+    deadline_ms: 250,
+    ..LIMITS
 };
 #[repr(C)]
 struct QjsResult {
@@ -61,6 +65,31 @@ extern "C" {
         config: *const u8,
         config_len: usize,
     ) -> QjsResult;
+    fn qjs_fetch_reply_set(
+        reply: *mut std::ffi::c_void,
+        status: i32,
+        body: *const u8,
+        len: usize,
+    ) -> i32;
+    fn qjs_run_v2_fetch(
+        token: *mut std::ffi::c_void,
+        limits: *const Limits,
+        callback: unsafe extern "C" fn(
+            *mut std::ffi::c_void,
+            *const u8,
+            usize,
+            u32,
+            *mut std::ffi::c_void,
+        ) -> i32,
+        opaque: *mut std::ffi::c_void,
+        package: *const u8,
+        package_len: usize,
+        hook: *const std::ffi::c_char,
+        event: *const u8,
+        event_len: usize,
+        config: *const u8,
+        config_len: usize,
+    ) -> QjsResult;
     fn qjs_result_free(result: *mut QjsResult);
     fn sim_check_syntax(
         limits: *const Limits,
@@ -79,6 +108,92 @@ struct Token(*mut std::ffi::c_void);
 impl Drop for Token {
     fn drop(&mut self) {
         unsafe { qjs_cancel_token_free(self.0) }
+    }
+}
+
+// Offline fixture transport only. No sockets, DNS, tokens or HTTP clients live in the simulator.
+// FETCH length timeout\n<request JSON>\n -> RESPONSE status length\n<body>\n (or ERROR\n).
+struct FixtureTransport {
+    input: BufReader<std::io::Stdin>,
+    output: std::io::Stdout,
+    error: Option<String>,
+}
+impl FixtureTransport {
+    fn line(&mut self) -> Result<String, String> {
+        let mut bytes = Vec::new();
+        for _ in 0..128 {
+            let mut byte = [0];
+            self.input
+                .read_exact(&mut byte)
+                .map_err(|_| "fixture response ended early")?;
+            if byte[0] == b'\n' {
+                return String::from_utf8(bytes).map_err(|_| "invalid fixture header".into());
+            }
+            bytes.push(byte[0]);
+        }
+        Err("oversized fixture header".into())
+    }
+    fn reply(
+        &mut self,
+        request: &[u8],
+        timeout: u32,
+        reply: *mut std::ffi::c_void,
+    ) -> Result<(), String> {
+        if request.len() > 128 * 1024 {
+            return Err("oversized fetch request".into());
+        }
+        write!(self.output, "FETCH {} {}\n", request.len(), timeout)
+            .and_then(|_| self.output.write_all(request))
+            .and_then(|_| self.output.write_all(b"\n"))
+            .and_then(|_| self.output.flush())
+            .map_err(|_| "cannot write fixture request")?;
+        let line = self.line()?;
+        if line == "ERROR" {
+            return Err("fixture network failure".into());
+        }
+        let fields: Vec<&str> = line.split(' ').collect();
+        if fields.len() != 3 || fields[0] != "RESPONSE" {
+            return Err("invalid fixture reply".into());
+        }
+        let status: i32 = fields[1].parse().map_err(|_| "invalid fixture status")?;
+        let length: usize = fields[2].parse().map_err(|_| "invalid fixture length")?;
+        if !(200..=599).contains(&status) || length > 1024 * 1024 {
+            return Err("invalid fixture response bounds".into());
+        }
+        let mut body = vec![0; length];
+        self.input
+            .read_exact(&mut body)
+            .map_err(|_| "incomplete fixture body")?;
+        let mut newline = [0];
+        self.input
+            .read_exact(&mut newline)
+            .map_err(|_| "incomplete fixture terminator")?;
+        if newline != [b'\n'] {
+            return Err("invalid fixture terminator".into());
+        }
+        if unsafe { qjs_fetch_reply_set(reply, status, body.as_ptr(), body.len()) } != 0 {
+            return Err("fixture response rejected by bridge".into());
+        }
+        Ok(())
+    }
+}
+unsafe extern "C" fn fixture_fetch(
+    opaque: *mut std::ffi::c_void,
+    request: *const u8,
+    length: usize,
+    timeout: u32,
+    reply: *mut std::ffi::c_void,
+) -> i32 {
+    let transport = &mut *(opaque as *mut FixtureTransport);
+    if request.is_null() || length > 128 * 1024 {
+        return 1;
+    }
+    match transport.reply(std::slice::from_raw_parts(request, length), timeout, reply) {
+        Ok(()) => 0,
+        Err(error) => {
+            transport.error = Some(error);
+            1
+        }
     }
 }
 
@@ -115,7 +230,7 @@ fn execute(args: &[String]) -> Result<i32, String> {
         return Ok(0);
     }
     if args.is_empty() || (args.len() == 1 && matches!(args[0].as_str(), "--help" | "-h")) {
-        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
+        println!("usage: interceptor-simulator check SOURCE.js\n       interceptor-simulator run-package PACKAGE.json request.onEnter|request.onLeave|response.onEnter|response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run-package-fetch PACKAGE.json response.onLeave EVENT.json CONFIG.json\n       interceptor-simulator run SOURCE.js onRequest|onResponse EVENT.json CONFIG.json (legacy v1)\n       interceptor-simulator --version\n\nrun-package-fetch uses the offline FETCH/RESPONSE fixture protocol on stdin/stdout; it never sends HTTP.\ncheck parses JavaScript without executing it. run-package selects the script from the package manifest and prints recorded actions. No HTTP requests or webhooks are sent.");
         return Ok(0);
     }
     match (args[0].as_str(), args.len()) {
@@ -146,8 +261,9 @@ fn execute(args: &[String]) -> Result<i32, String> {
             }
             Ok(status)
         }
-        ("run", 5) | ("run-package", 5) => {
-            let v2 = args[0] == "run-package";
+        ("run", 5) | ("run-package", 5) | ("run-package-fetch", 5) => {
+            let fetch = args[0] == "run-package-fetch";
+            let v2 = args[0] != "run";
             let allowed: &[&str] = if v2 {
                 &[
                     "request.onEnter",
@@ -165,6 +281,9 @@ fn execute(args: &[String]) -> Result<i32, String> {
                     "hook must be onRequest or onResponse"
                 }
                 .into());
+            }
+            if fetch && args[2] != "response.onLeave" {
+                return Err("fetch fixtures require response.onLeave".into());
             }
             let source = read_regular(
                 &args[1],
@@ -186,8 +305,27 @@ fn execute(args: &[String]) -> Result<i32, String> {
             if token.0.is_null() {
                 return Ok(7);
             }
+            let mut fixture = FixtureTransport {
+                input: BufReader::new(std::io::stdin()),
+                output: std::io::stdout(),
+                error: None,
+            };
             let result = unsafe {
-                if v2 {
+                if fetch {
+                    qjs_run_v2_fetch(
+                        token.0,
+                        &FETCH_LIMITS,
+                        fixture_fetch,
+                        (&mut fixture as *mut FixtureTransport).cast(),
+                        source.as_ptr(),
+                        source.len(),
+                        hook.as_ptr(),
+                        event.as_ptr(),
+                        event.len(),
+                        config.as_ptr(),
+                        config.len(),
+                    )
+                } else if v2 {
                     qjs_run_v2(
                         token.0,
                         &LIMITS,
@@ -226,12 +364,18 @@ fn execute(args: &[String]) -> Result<i32, String> {
                     return Ok(5);
                 }
                 let mut output = std::io::stdout().lock();
+                if fetch {
+                    writeln!(output, "RESULT {}", data.len()).map_err(|e| e.to_string())?;
+                }
                 output
                     .write_all(data)
                     .and_then(|_| output.write_all(b"\n"))
                     .map_err(|e| e.to_string())?;
             } else {
                 eprintln!("QuickJS status {}", result.status);
+                if let Some(error) = fixture.error {
+                    eprintln!("{}", error);
+                }
             }
             Ok(result.status)
         }

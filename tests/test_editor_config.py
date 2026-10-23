@@ -55,21 +55,32 @@ Interceptor.attach({
         self.assertEqual(result.stdout.count('TS2540'), 3, result.stdout + result.stderr)
         self.assertNotIn('TS7006', result.stdout, 'callbacks must receive contextual types')
 
-    def test_unknown_fields_and_host_globals_are_rejected(self):
+    def test_unknown_fields_and_unsupported_host_globals_are_rejected(self):
         result = self.check_project({'plugins/demo/hooks/example.com/GET.ts': '''
 Interceptor.attach({request:{onEnter(req, cfg) {
   req.missing;
   cfg.missing;
-  fetch('https://example.com');
   window.location;
   process.env;
   setTimeout(() => {}, 1);
 }}});
 '''})
         self.assertNotEqual(result.returncode, 0)
-        for name in ('missing', 'fetch', 'window', 'process', 'setTimeout'):
+        for name in ('missing', 'window', 'process', 'setTimeout'):
             self.assertIn(name, result.stdout, result.stdout + result.stderr)
         self.assertNotIn('TS7006', result.stdout)
+
+    def test_response_leave_has_typed_fetch_without_dom_or_node_types(self):
+        result = self.check_project({'plugins/demo/hooks/example.com/GET.ts': '''
+Interceptor.attach({response:{async onLeave(res) {
+  const reply = await fetch('https://example.com', {method: 'POST', body: '{}'});
+  const status: number = reply.status;
+  const ok: boolean = reply.ok;
+  const text: string = await reply.text();
+  void [status, ok, text, await reply.json()];
+}}});
+'''})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_strict_index_and_optional_properties_match_authoring(self):
         result = self.check_project({'plugins/demo/hooks/example.com/GET.ts': '''
@@ -85,7 +96,7 @@ Interceptor.attach({request:{onEnter(req, cfg) {
     def test_tasks_are_explicit_process_commands_in_workspace(self):
         tasks = json.loads((ROOT / '.vscode/tasks.json').read_text())['tasks']
         actual = {task['label']: task for task in tasks}
-        for script in ('build:dev', 'check:authoring'):
+        for script in ('build', 'check:authoring'):
             task = actual[script]
             self.assertEqual(task['type'], 'process')
             self.assertEqual(task['command'], 'bun')

@@ -52,12 +52,12 @@ bun run check
 ## シミュレーター
 
 ```sh
-bun run build:dev
+bun run build
 bun run simulator check build/scripts/request-summary/hooks/api.example.com/search/POST.js
 bun run simulator run-package build/dev/plugins/request-summary.json request.onEnter fixtures/request-event.json fixtures/config.json
 ```
 
-先に`bun run check`を実行してください。ソースを変更したら`build:dev`を再実行します。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。従来の`bun run build`は、出力先の`build/site/`が存在しないか空である必要があります。
+先に`bun run check`を実行してください。ソースを変更したら`build`を再実行します。コンパイルやパッケージ生成に失敗した場合は、`build/dev/`の前回のパッケージを残します。内部の`build/scripts/`と`build/manifests/`もビルドで再生成されるため、パッケージ生成に失敗しても更新されている場合があります。`build:dev`は互換用の別名として残しています。
 
 シミュレーターの`check`はスクリプトを実行せず構文を検査します。`run-package`はパッケージのmanifestから通信条件とHookに合うファイルを選び、アクションと本文変更をJSONで返します。ビルドした`.tools/bin/interceptor-simulator`は対象のOS・CPU向けの単体バイナリとして実行できます。詳しくは[作成ガイド](website/authoring.md)を参照してください。
 

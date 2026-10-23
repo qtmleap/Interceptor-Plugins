@@ -1,0 +1,43 @@
+{
+  "versions": {
+    "4.0.0-091d4283": {
+      "history": "0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f",
+      "detail": "824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602"
+    }
+  },
+  "sources": {
+    "protocol": {
+      "repository": "https://github.com/samuelthomas2774/nxapi",
+      "revision": "47c9d35d9d51d33e62dd6d3733b616e0ad31b02b",
+      "note": "Protocol facts: bullet-token POST201, GraphQL persisted-query POST, Bearer authorization, x-web-view-ver, accept-language and X-Requested-With: XMLHttpRequest (src/api/splatnet3.ts lines112-121). No third-party implementation code copied.",
+      "url": "https://github.com/samuelthomas2774/nxapi/blob/47c9d35d9d51d33e62dd6d3733b616e0ad31b02b/src/api/splatnet3.ts",
+      "sha256": "a256255766f29071f284264a964954669107f9d0b9711a2cea2d829cc391356b"
+    },
+    "queryMapping": {
+      "repository": "https://github.com/nintendoapis/splatnet3-types",
+      "commit": "f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf",
+      "appFullVersion": "4.0.0-091d4283",
+      "appRevision": "091d428399dc86fd3a7fc43d64bd33b8bd1e875d",
+      "note": "Source mapping only; not verified current-production support.",
+      "files": [
+        {
+          "url": "https://github.com/nintendoapis/splatnet3-types/blob/f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf/src/generated/named/CoopHistoryQuery.ts",
+          "sha256": "864d334fc3b7ea02146a4e73455ca5274822ba0277a1b0774a5858b9a3d11e46"
+        },
+        {
+          "url": "https://github.com/nintendoapis/splatnet3-types/blob/f2c30a82e4d3c0c877fd8e68b079a7edbcf9bcdf/src/generated/named/CoopHistoryDetailQuery.ts",
+          "sha256": "7ac442821890c113f3a70bdeea48fc128463ba37b8ab105e7e73bb255b5d34aa"
+        }
+      ]
+    },
+    "bulletTokenResponse": {
+      "url": "https://github.com/samuelthomas2774/nxapi/blob/47c9d35d9d51d33e62dd6d3733b616e0ad31b02b/src/api/splatnet3-types.ts",
+      "revision": "47c9d35d9d51d33e62dd6d3733b616e0ad31b02b",
+      "fields": [
+        "bulletToken",
+        "lang"
+      ],
+      "note": "BulletToken response type; use the issued lang or captured Accept-Language, never guess a language."
+    }
+  }
+}

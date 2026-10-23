@@ -61,7 +61,7 @@ The body preview should show `{"query":"x","limit":5}`. Changing the host to `ot
 
 A synthetic test runs one phase. Selecting a leave phase does not send traffic; supply the data that would be visible after forwarding.
 
-To change the source code, edit `plugins/NAME/hooks/` in your development environment, rebuild with `bun run build:dev` and reimport the generated package.
+To change the source code, edit `plugins/NAME/hooks/` in your development environment, rebuild with `bun run build` and reimport the generated package.
 
 ## Use on live traffic
 

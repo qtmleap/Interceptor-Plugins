@@ -144,6 +144,38 @@ Interceptor.attach({
 
 このHookで本文を変更しようとするとエラーになります。合成テストでは渡された通信データからアクションを返し、結果欄で内容を確認できます。実通信では戻り値のWebhook形式のアクションを保存・送信しません。
 
+## fetch {#fetch}
+
+`response.onLeave`から標準の`fetch`を呼び、応答を`await`できます。
+URL・メソッド・ヘッダー・本文はJS内に記述します。送信先をmanifestの`outbound`へ重ねて宣言する必要はありません。
+
+```ts
+Interceptor.attach({
+  response: {
+    async onLeave(res) {
+      const response = await fetch('https://api.example.com/results', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ result: res.body })
+      });
+      if (!response.ok) throw new Error('request failed');
+      const result = await response.json();
+    }
+  }
+});
+```
+
+この実装はHTTPSの公開ホスト・443番ポートへのGET/POST/PUTとJSON本文に対応します。
+クエリ文字列、リダイレクト、ストリーミング、圧縮応答、自動Cookieは扱いません。
+応答の`status`・`ok`・`bodyUsed`を確認し、`text()`または`json()`で本文を1回だけ読み取れます。
+`fetch`を使うHookは、元の転送を待たせず後続実行します。既存の同期Hookは従来どおりです。
+非同期の補助関数は`response.onLeave`内に置きます。
+
+本文は8KiB、応答は1MiB、1回のHookは64リクエスト・累計16MiBまでです。
+処理時間と並列数にも上限があり、承認の取り消しやトンネル終了でキャンセルします。
+既存の合成テスト画面はネットワークを実行しません。オフラインの応答を使う検証には
+`interceptor-simulator run-package-fetch`を使います。
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })`は、manifestの`outbound`に宣言した別のAPIへGETリクエストを送るための関数です。送信要求を登録してすぐに戻り、`void`を返します。実際のHTTP送信はHookの検証後にアプリが行います。Hookから送信結果は参照できず、元の通信も送信完了を待ちません。`fetch`、Promise、`Response`のAPIではありません。
@@ -209,7 +241,7 @@ Interceptor.send('bearer', { headers: { authorization: 'Bearer ' + token } });
 
 アプリの共通プロセッサーはHookを1つずつ実行し、待機は最大8件です。上限を超えた`onEnter`は元の通信内容を転送します。処理が完了していない`onLeave`の通知は接続ごとに最大4件です。超過分は転送を止めずに省略します。通知の実行は保証されません。
 
-スクリプトの例外や時間制限超過では元の通信内容を転送します。通信の取得への同意やプラグインの承認を利用者が取り消した場合は接続を終了します。実行は同期式で、`fetch`、Promise、タイマー、ファイル操作、NodeやブラウザのAPIは使えません。
+スクリプトの例外や時間制限超過では元の通信内容を転送します。通信の取得への同意やプラグインの承認を利用者が取り消した場合は接続を終了します。`response.onLeave`の`fetch`だけは非同期に実行できます。それ以外のHookは同期式です。タイマー、ファイル操作、Nodeやその他のブラウザAPIは使えません。
 
 1回の実行は50 ms、ヒープ8 MiB、プラグイン内のソース合計128 KiB、入力64 KiB、設定8 KiB、結果32 KiBまでです。返せるアクションは最大2件です。
 

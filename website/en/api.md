@@ -140,6 +140,25 @@ Interceptor.attach({
 
 Attempted body edits are errors. In synthetic tests, return actions based on the supplied traffic data to inspect them in the results. Live processing does not save or deliver the returned Webhook actions.
 
+## fetch {#fetch}
+
+Call standard global `fetch` inside an async `response.onLeave` callback and await
+its response. Define the URL, method, headers and body in JS; no duplicate
+`outbound` destination declaration is required.
+
+Supported requests are GET/POST/PUT to public HTTPS hosts on port443 with JSON
+request bodies. Query strings, redirects, streaming, compressed responses and
+automatic cookies are unsupported. Responses expose `status`, `ok`, `bodyUsed`,
+`text()` and `json()`; the body can be consumed once. Put async helper functions
+inside `response.onLeave`. A fetching hook runs after forwarding, while existing
+synchronous hooks retain their behavior.
+
+Request bodies are limited to8KiB, responses to1MiB, and each invocation to
+64requests and16MiB of response data. Runtime, concurrency and cancellation
+limits also apply. Revocation or tunnel shutdown cancels pending work.
+The existing synthetic-test screen sends no network traffic; use the offline
+`interceptor-simulator run-package-fetch` fixture protocol for response tests.
+
 ## Interceptor.send {#interceptor-send}
 
 `Interceptor.send(binding, { headers })` requests a GET to another API declared in the manifest `outbound` metadata. It records the request and returns `void` immediately. The app performs the actual HTTP request after hook validation; the hook cannot read the result, and the original traffic does not wait for delivery to finish. It does not implement `fetch`, Promise or `Response` semantics.
@@ -205,7 +224,7 @@ Upgrade requests and nested CONNECT requests within a decrypted connection recei
 
 The app's shared processor runs one hook phase at a time, with at most eight waiting. An overloaded `onEnter` forwards the original traffic. Each connection allows at most four in-flight `onLeave` notifications; excess notifications are dropped while forwarding continues. Notification execution is not guaranteed.
 
-Script errors and timeouts forward the original traffic. Revoked capture consent or plugin approval closes the connection. Execution is synchronous: no `fetch`, promises, timers, files, Node APIs or browser APIs.
+Script errors and timeouts forward the original traffic. Revoked capture consent or plugin approval closes the connection. Only `response.onLeave` supports asynchronous `fetch`; other hooks remain synchronous. Timers, files, Node APIs and other browser APIs are unavailable.
 
 Per invocation: 50 ms, 8 MiB heap, 128 KiB total plugin source, 64 KiB event, 8 KiB config, 32 KiB result and at most two actions.
 

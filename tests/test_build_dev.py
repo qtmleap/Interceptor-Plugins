@@ -13,6 +13,18 @@ import test_filesystem_hooks as filesystem_hooks
 
 
 class BuildDevTests(Case):
+    def test_default_package_build_generates_scripts_manifests_and_rebuilds(self):
+        root = self.routed_root()
+        shutil.copy(REPO / 'package.json', root / 'package.json')
+        for _ in range(2):
+            result = subprocess.run(['bun', 'run', 'build'], cwd=root,
+                                    capture_output=True, text=True, timeout=60)
+            self.ok(result)
+            package = json.loads(self.package(root).read_text())
+            self.assertEqual(json.loads((root / 'build/manifests/demo.json').read_text()), package['manifest'])
+            for name, source in package['sourceFiles'].items():
+                self.assertEqual((root / 'build/scripts/demo' / name).read_text(), source)
+
     def routed_root(self):
         helper = filesystem_hooks.FilesystemHooksTests()
         helper.tmp = self.tmp

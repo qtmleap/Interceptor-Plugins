@@ -1,4 +1,4 @@
-/** Interceptor's synchronous plugin contract: schema 2 HTTP hooks and legacy synthetic tests.
+/** Interceptor's plugin contract: synchronous schema 2 HTTP hooks (only `response.onLeave` may be async) and legacy synthetic tests.
  * Optional fields depend on input and read grants.
  * Types aid authoring; the app validates limits and permissions at runtime.
  */
@@ -68,7 +68,8 @@ declare namespace Interceptor {
     };
     response?: {
       onEnter?(res: ResponseLeg, cfg: Config): Outcome;
-      onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome;
+      /** Requires a compatible host that implements global `fetch` and awaits this callback. */
+      onLeave?(res: ReadOnlyResponseLeg, cfg: Config): Outcome | Promise<Outcome>;
     };
   }
   /** Options for `send`. Supply a string header map, including an empty map when no headers are needed. */
@@ -80,6 +81,25 @@ declare namespace Interceptor {
    * Synchronous and non-blocking: it returns no value, Promise or Response, and the hook never sees the result.
    */
   function send(binding: string, options: SendOptions): void;
+  /** Options for the global `fetch`, available only inside a `response.onLeave` callback. */
+  interface FetchInit {
+    method?: 'GET' | 'POST' | 'PUT';
+    headers?: { [name: string]: string };
+    body?: string;
+  }
+  interface FetchResponse {
+    readonly status: number;
+    readonly ok: boolean;
+    readonly bodyUsed: boolean;
+    text(): Promise<string>;
+    json(): Promise<any>;
+  }
   /** Registers this file's handlers. The build derives targets from its path. */
   function attach(hooks: Hooks): void;
 }
+/**
+ * Asynchronous HTTP request. Call it directly (not aliased, shadowed or via `globalThis`) inside a
+ * `response.onLeave` callback body, including nested functions there. The compiler checks direct
+ * references; runtime enforcement remains the host's responsibility.
+ */
+declare function fetch(url: string, init?: Interceptor.FetchInit): Promise<Interceptor.FetchResponse>;

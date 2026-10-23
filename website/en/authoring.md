@@ -125,14 +125,14 @@ The runtime produces `mutation`; callback authors only edit `body`. Use `expectE
 
 ```sh
 bun install --frozen-lockfile --ignore-scripts
-bun run build:dev
+bun run build
 bun run check:authoring
 bun run check
 ```
 
-`build:dev` generates unsigned packages in `build/dev/plugins/NAME.json`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
+`build` generates unsigned packages in `build/dev/plugins/NAME.json`. Rerun it after editing sources. Compilation or packaging failure preserves the previous packages in `build/dev/`. The build also regenerates internal `build/scripts/` and `build/manifests/`, which may advance even if packaging fails.
 
-`check:authoring` runs type checks, tool tests and package generation; `check` also executes `fixtures/cases.json` and checks signatures and tamper detection. The existing `bun run build` writes to `build/site/`, which must be absent or empty.
+`check:authoring` runs type checks, tool tests and package generation; `check` also executes `fixtures/cases.json` and checks signatures and tamper detection. `build:dev` remains a compatibility alias for `build`.
 
 VS Code checks each hook file with the SDK types without emitting JavaScript. Build and authoring-check tasks are available. The build still validates file locations and allowed syntax.
 

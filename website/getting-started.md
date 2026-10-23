@@ -61,7 +61,7 @@ import HookFlow from './.vitepress/components/HookFlow.vue'
 
 合成テストは1回につき1つのHookを実行します。`request.onLeave`を選んでも実際にリクエストを送るわけではありません。転送後に渡される内容を入力として用意して試します。
 
-ソースコードを変更する場合は、開発環境の`plugins/NAME/hooks/`を編集し、`bun run build:dev`で再ビルドして、生成されたパッケージを読み込み直します。
+ソースコードを変更する場合は、開発環境の`plugins/NAME/hooks/`を編集し、`bun run build`で再ビルドして、生成されたパッケージを読み込み直します。
 
 ## 実通信で使う
 
