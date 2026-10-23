@@ -26,11 +26,11 @@ class SalmonQuickJSTests(unittest.TestCase):
         assert build.returncode == 0, build.stdout + build.stderr
         (ROOT / 'build/evidence').mkdir(parents=True, exist_ok=True)
 
-    def execute(self, replies, *, save_fail_at=None):
+    def execute(self, replies, *, save_fail_at=None, token='synthetic-token', max_results=50):
         event = {'phase': 'response.onLeave', 'request': {
             'method': 'POST', 'host': 'api.lp1.av5ja.srv.nintendo.net', 'path': '/api/bullet_tokens',
             'headers': {'x-web-view-ver': fx.VERSION, 'accept-language': 'ja-JP'}},
-            'response': {'status': 201, 'headers': {}, 'body': {'bulletToken': 'synthetic-token', 'lang': 'ja-JP'}}}
+            'response': {'status': 201, 'headers': {}, 'body': {'bulletToken': token, 'lang': 'ja-JP'}}}
         packets = b''
         planned_saves = 0
         if isinstance(replies, bytes):
@@ -47,7 +47,7 @@ class SalmonQuickJSTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='splatnet3-quickjs-') as directory:
             event_path, config_path = Path(directory) / 'event.json', Path(directory) / 'config.json'
             event_path.write_text(json.dumps(event))
-            config_path.write_text(json.dumps({'endpoints': {}, 'settings': {'maxResults': 50}}))
+            config_path.write_text(json.dumps({'endpoints': {}, 'settings': {'maxResults': max_results}}))
             proc = subprocess.run([str(SIMULATOR), 'run-package-fetch',
                                    str(ROOT / 'build/dev/plugins/splatnet3-salmon.json'), 'response.onLeave',
                                    str(event_path), str(config_path)], input=packets, capture_output=True, timeout=20)
@@ -159,10 +159,29 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(len(self.saves), 21)
         self.assertEqual(result['actions'][0]['json']['acquired'], ids)
 
-    def test_non_ascii_maximum_length_id_hash_in_real_quickjs(self):
-        id_ = 'あ' * 170 + 'ab'
-        self.assertEqual(len(id_.encode()), 512)
+    def test_long_non_ascii_id_hash_in_real_quickjs(self):
+        id_ = 'あ' * 300
         proc, _, result = self.execute([(200, fx.history([id_])), (200, fx.detail(id_))])
         self.assertEqual(proc.returncode, 0, proc.stderr.decode())
         self.assertEqual([path for _, path, _ in self.saves], ['Salmon Run/history.json', fx.detail_path(id_)])
         self.assertEqual(result['actions'][0]['json']['acquired'], [id_])
+
+    def test_native_host_rejects_unsafe_token_headers_without_exposing_values(self):
+        for token in ['private\r\ntoken', 'x' * 5000]:
+            with self.subTest(length=len(token)):
+                proc, requests, result = self.execute([], token=token)
+                self.assertEqual(proc.returncode, 6, proc.stderr.decode())
+                self.assertEqual(requests, [])
+                self.assertEqual(self.saves, [])
+                self.assertIsNone(result)
+                self.assertNotIn(token.encode(), proc.stderr + proc.stdout)
+
+    def test_large_history_minimal_detail_and_empty_errors_in_real_quickjs(self):
+        ids = [f'd{i}' for i in range(300)]
+        body = {'data': {'coopHistoryDetail': {'id': ids[0]}}, 'errors': []}
+        proc, requests, result = self.execute([(200, {**fx.history(ids), 'errors': []}), (200, body)], max_results=1)
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(len(self.saves), 2)
+        self.assertEqual(result['actions'][0]['json']['remaining'], 299)
+        self.assertEqual(json.loads(self.saves[1][2]), body)

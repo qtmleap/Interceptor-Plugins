@@ -179,22 +179,14 @@ class SalmonHookTests(unittest.TestCase):
             self.assertEqual(out['code'], code)
             self.assertEqual(len(out['requests']), 1)
 
-    def test_invalid_tokens_and_missing_context_stop_before_fetch(self):
-        for token in ['bad\r\ntoken', 'bad token', 'x' * 4097]:
-            out = run(res=response(body={'bulletToken': token}))
-            self.assertEqual(out['code'], 'invalid-token')
-            self.assertEqual(out['requests'], [])
+    def test_missing_context_stops_before_fetch(self):
         out = run(res=response(request={'headers': {}}))
         self.assertEqual(out['code'], 'missing-context')
         self.assertEqual(out['requests'], [])
 
 
-def utf8(text):
-    return len(text.encode('utf-8'))
-
-
 class SalmonSaveTests(unittest.TestCase):
-    """Plugin 1.2.0: Interceptor.createFile stores the original history text and each validated full detail."""
+    """Store original responses; only query/file identity and operational checks are needed."""
 
     HISTORY_TEXT = ' {"data": {"coopResult": {"historyGroups": {"nodes": [\n {"historyDetails": {"nodes": [{"id": "d1"}, {"id": "d2"}]}}]}}}} \n'
 
@@ -204,7 +196,7 @@ class SalmonSaveTests(unittest.TestCase):
     def replies(self, *details):
         return [{'status': 200, 'body': self.HISTORY_TEXT}] + [{'status': s, 'body': b} for s, b in details]
 
-    def test_saves_original_history_text_then_each_validated_detail_text(self):
+    def test_saves_original_history_text_then_each_available_detail_text(self):
         d1, d2 = self.detail_text('d1'), self.detail_text('d2')
         out = run(replies=self.replies((200, d1), (200, d2)))
         self.assertTrue(out['ok'], out)
@@ -231,8 +223,7 @@ class SalmonSaveTests(unittest.TestCase):
 
     def test_invalid_or_error_details_are_never_saved(self):
         cases = [(detail('wrong'), 'id-mismatch'),
-                 ({'errors': [{'message': 'boom'}]}, 'graphql'), ({'data': {}}, 'invalid-response'),
-                 ({'data': {'coopHistoryDetail': {'id': 'd1'}}}, 'invalid-principal')]
+                 ({'errors': [{'message': 'boom'}]}, 'graphql'), ({'data': {}}, 'invalid-response')]
         for body, code in cases:
             with self.subTest(code=code):
                 out = run(replies=self.replies((200, body)))
@@ -261,8 +252,6 @@ class SalmonSaveTests(unittest.TestCase):
         self.assertEqual(out['saves'][1]['path'],
                          'Salmon Run/details/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.json')
         for id_ in ids[2:]:
-            if utf8(id_) > 512:
-                continue
             out = run(replies=[{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}])
             self.assertEqual(out['saves'][1]['path'], detail_path(id_))
 
@@ -276,9 +265,8 @@ class SalmonSaveTests(unittest.TestCase):
         for path in paths:
             self.assertRegex(path, r'^Salmon Run/details/[0-9a-f]{64}\.json$')
 
-    def test_maximum_length_result_ids_use_fixed_length_paths(self):
-        id_ = 'あ' * 170 + 'ab'
-        self.assertEqual(utf8(id_), 512)
+    def test_long_result_ids_use_fixed_length_paths(self):
+        id_ = 'あ' * 300
         replies = [{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}]
         out = run(replies=replies)
         self.assertTrue(out['ok'], out)

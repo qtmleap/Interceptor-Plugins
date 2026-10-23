@@ -37,3 +37,10 @@ while foreground, retaining private records for retry on folder/provider failure
 Promise success means the private commit, not iCloud server upload. The simulator
 observes requests through its offline CREATEFILE/CREATED protocol and never writes
 files. Actual createFile/iCloud M3 acceptance is a separate device check.
+
+The acquisition Plugin checks only the fields needed to follow result IDs and
+associate a response with its requested file, plus HTTP/GraphQL errors and the
+configured request limit. Gameplay/player fields are stored without schema
+validation. IDs are opaque nonempty strings; filenames remain fixed SHA-256
+hex digests, and native request/body limits still apply. Detailed validation
+belongs downstream. Response text is saved as received, including unknown fields.
