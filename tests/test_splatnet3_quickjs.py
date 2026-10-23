@@ -158,3 +158,11 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(len(requests), 21)
         self.assertEqual(len(self.saves), 21)
         self.assertEqual(result['actions'][0]['json']['acquired'], ids)
+
+    def test_non_ascii_maximum_length_id_hash_in_real_quickjs(self):
+        id_ = 'あ' * 170 + 'ab'
+        self.assertEqual(len(id_.encode()), 512)
+        proc, _, result = self.execute([(200, fx.history([id_])), (200, fx.detail(id_))])
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual([path for _, path, _ in self.saves], ['Salmon Run/history.json', fx.detail_path(id_)])
+        self.assertEqual(result['actions'][0]['json']['acquired'], [id_])

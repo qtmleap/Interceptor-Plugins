@@ -1,0 +1,24 @@
+{
+  "build/scripts/request-summary/hooks/api.example.com/search/POST.js": {
+    "source": "Interceptor.attach({\n  request: {\n    onEnter(req, cfg) {\n      if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) return;\n      req.body.limit = 5;\n    },\n    onLeave(req, cfg) {\n      const endpointId = cfg.endpoints?.preview;\n      if (!endpointId) return;\n      return { actions: [{ type: 'webhook', endpointId,\n        json: { summary: req.method + ' ' + req.host + req.path } }] };\n    }\n  },\n  response: {\n    onEnter(res, cfg) {\n      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;\n      res.body.maintenance = true;\n    },\n    onLeave(res, cfg) {\n      const endpointId = cfg.endpoints?.preview;\n      if (!endpointId) return;\n      return { actions: [{ type: 'webhook', endpointId,\n        json: { path: res.request.path!, status: res.status! } }] };\n    }\n  }\n});\n",
+    "sha256": "17e815c7f8fbb1cbecaa2d775c3e91b2974cd03d6b97f912e784799c8e267507",
+    "provenance": {
+      "commit": "99226a1600b17187947be7d94e2e34a8cd8f5ddd",
+      "command": "bun run build",
+      "compilerSha256": "15efa41bf79e3c7e34be4f70b6ee1d03ee9c248a095c4e24ed608e472a9e9465",
+      "bun": "1.3.6",
+      "typescript": "5.8.3"
+    }
+  },
+  "build/scripts/server-error-filter/hooks/example.com/GET.js": {
+    "source": "Interceptor.attach({\n  response: {\n    onEnter(res, cfg) {\n      if (res.status === undefined || res.status < 500 || res.status > 599) return;\n      if (!res.body || typeof res.body !== 'object' || Array.isArray(res.body)) return;\n      res.body.maintenance = true;\n    },\n    onLeave(res, cfg) {\n      if (res.status === undefined || res.status < 500 || res.status > 599) return;\n      const endpointId = cfg.endpoints?.preview;\n      if (!endpointId) return;\n      return { actions: [{ type: 'webhook', endpointId,\n        json: { host: res.request.host!, status: res.status } }] };\n    }\n  }\n});\n",
+    "sha256": "ce915327719a41d1c025a67af9242eec6f4422d333507f1f001b9fdcc4c2f711",
+    "provenance": {
+      "commit": "99226a1600b17187947be7d94e2e34a8cd8f5ddd",
+      "command": "bun run build",
+      "compilerSha256": "15efa41bf79e3c7e34be4f70b6ee1d03ee9c248a095c4e24ed608e472a9e9465",
+      "bun": "1.3.6",
+      "typescript": "5.8.3"
+    }
+  }
+}

@@ -12,6 +12,7 @@ TASK_TEMP=$(mktemp -d /tmp/interceptor-authoring-check.XXXXXX)
 trap 'rm -rf -- "$TASK_TEMP"' EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+bun run check:lint
 tools/build-runtime.sh
 export INTERCEPTOR_SIMULATOR="$TASK_ROOT/.tools/bin/interceptor-simulator"
 python3 -m unittest discover -s tests -v

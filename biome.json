@@ -1,0 +1,36 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.6.2/schema.json",
+  "files": {
+    "includes": [
+      "**/*.{js,mjs,cjs,jsx,ts,tsx}",
+      "!**/node_modules/**",
+      "!**/.build/**",
+      "!biome-plugins/**",
+      "!.tools/**",
+      "!.build/**",
+      "!.codex/**",
+      "!.claude/**",
+      "!build/**",
+      "!**/.vitepress/cache/**",
+      "!**/.vitepress/dist/**"
+    ]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "assist": {
+    "enabled": false
+  },
+  "linter": {
+    "rules": {
+      "preset": "none",
+      "suspicious": {
+        "noVar": "error"
+      }
+    }
+  },
+  "plugins": [
+    "./biome-plugins/no-let.grit",
+    "./tools/lint/no-mutable-bindings.grit"
+  ]
+}

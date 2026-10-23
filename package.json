@@ -20,10 +20,13 @@
     "simulator": "tools/simulator.sh",
     "check:native": "tools/check-native.sh",
     "diagrams:render": "bun tools/render-hook-diagrams.ts",
-    "diagrams:check": "bun tools/render-hook-diagrams.ts --check"
+    "diagrams:check": "bun tools/render-hook-diagrams.ts --check",
+    "check:lint": "tools/check-lint.sh"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.2",
     "@tailwindcss/vite": "4.3.3",
+    "js-sha256": "1.0.0",
     "tailwindcss": "4.3.3",
     "typescript": "5.8.3",
     "vitepress": "1.6.4"

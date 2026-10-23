@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import ts from 'typescript';
 
 const root = path.resolve(process.argv[2] || '.');
@@ -15,6 +16,18 @@ const options = {
   lib: ['lib.es2020.d.ts'], types: [], newLine: ts.NewLineKind.LineFeed,
   declaration: false, sourceMap: false, removeComments: false, noResolve: false,
 };
+// The only dependency a routed hook may import, bundled into the hook from pinned, hash-verified files.
+const DEPENDENCY = {
+  specifier: 'js-sha256', version: '1.0.0', exportName: 'sha256',
+  declaration: 'index.d.ts', declarationSha256: '5bc40ff72c1bdfcd0b186cf0c17d74996d1fcde69ee6ab3b71337ce98b5f2c5f',
+  source: 'build/sha256.cjs', sourceSha256: 'fb7860e00d7718e1c4b0d1df112727261f8cbee112963db1b46ad7b5874041db',
+  license: 'LICENSE.txt', licenseSha256: '2153bd2978793748fbe0eb8f838ae2ae19f03f9d4ee5473dd1628a0c0790e4ab',
+};
+const ENTRY_NAMESPACE = 'interceptor-entry';
+const DEPENDENCY_NAMESPACE = 'interceptor-dependency';
+const MAX_OUTPUT = 131072;
+const LEFTOVER_IDENTIFIERS = new Set(['require', 'eval', 'Function', 'process', 'Buffer', 'TextEncoder', 'TextDecoder', '__dirname', '__filename']);
+const importOptions = { ...options, module: ts.ModuleKind.ES2015, moduleResolution: ts.ModuleResolutionKind.Bundler };
 const regular = file => {
   const info = fs.lstatSync(file);
   if (!info.isFile() || info.isSymbolicLink()) throw new Error(`Expected a regular file: ${file}`);
@@ -33,6 +46,89 @@ const isCreateAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdent
 const isStorageAccess = node => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)
   && node.expression.text === 'Interceptor' && node.name.text === 'Storage';
 const STORAGE_CASES = ['local', 'iCloudDrive'];
+
+// Accept exactly `import { sha256 } from 'js-sha256'` as the only import; any other form is rejected.
+function approvedImport(source) {
+  const imports = source.statements.filter(ts.isImportDeclaration);
+  if (!imports.length) return null;
+  const [node] = imports;
+  const clause = node.importClause;
+  const bindings = clause?.namedBindings;
+  if (imports.length !== 1 || !clause || clause.isTypeOnly || clause.name || node.attributes
+      || !bindings || !ts.isNamedImports(bindings) || bindings.elements.length !== 1
+      || bindings.elements[0].isTypeOnly || bindings.elements[0].propertyName
+      || bindings.elements[0].name.text !== DEPENDENCY.exportName
+      || !ts.isStringLiteral(node.moduleSpecifier) || node.moduleSpecifier.text !== DEPENDENCY.specifier) {
+    throw new Error(`${source.fileName}: the only supported import is import { ${DEPENDENCY.exportName} } from '${DEPENDENCY.specifier}'`);
+  }
+  return node;
+}
+
+function dependencyFile(relative, digest) {
+  const file = path.join(root, 'node_modules', DEPENDENCY.specifier, relative);
+  if (!fs.existsSync(file)) throw new Error(`Missing ${DEPENDENCY.specifier}@${DEPENDENCY.version}: run bun install --frozen-lockfile --ignore-scripts`);
+  const real = fs.realpathSync(file);
+  regular(real);
+  const bytes = fs.readFileSync(real);
+  if (createHash('sha256').update(bytes).digest('hex') !== digest) {
+    throw new Error(`${DEPENDENCY.specifier}/${relative} does not match the pinned ${DEPENDENCY.version} release`);
+  }
+  return { real, text: bytes.toString('utf8') };
+}
+
+// Bundle emitted ES module text and the pinned CommonJS build into one self-contained IIFE; nothing else can resolve.
+async function bundle(code) {
+  const dependency = dependencyFile(DEPENDENCY.source, DEPENDENCY.sourceSha256).text;
+  const license = dependencyFile(DEPENDENCY.license, DEPENDENCY.licenseSha256).text.trim();
+  const build = await Bun.build({
+    entrypoints: [`${ENTRY_NAMESPACE}:main`], target: 'browser', format: 'iife', minify: false, sourcemap: 'none',
+    splitting: false, throw: false,
+    plugins: [{
+      name: 'interceptor-virtual',
+      setup(api) {
+        api.onResolve({ filter: /.*/ }, args => {
+          if (args.path === `${ENTRY_NAMESPACE}:main`) return { path: 'main', namespace: ENTRY_NAMESPACE };
+          if (args.path === DEPENDENCY.specifier) return { path: 'sha256.cjs', namespace: DEPENDENCY_NAMESPACE };
+          throw new Error(`Unresolvable import: ${args.path}`);
+        });
+        api.onLoad({ filter: /.*/, namespace: ENTRY_NAMESPACE }, () => ({ contents: code, loader: 'js' }));
+        api.onLoad({ filter: /.*/, namespace: DEPENDENCY_NAMESPACE }, () => ({ contents: dependency, loader: 'js' }));
+      },
+    }],
+  });
+  if (!build.success || build.outputs.length !== 1 || build.logs.length !== 0) {
+    throw new Error(`Bundling failed: ${build.logs.map(log => log.message).join('; ')}`);
+  }
+  const bundled = await build.outputs[0].text();
+  const output = `/*! ${DEPENDENCY.specifier}@${DEPENDENCY.version}\n${license.replaceAll('*/', '* /')}\n*/\n${bundled}`;
+  postguard(output);
+  return output;
+}
+
+// Reject unresolved imports, dynamic evaluation and Node-only leftovers in the bundled script.
+function postguard(output) {
+  if (Buffer.byteLength(output) > MAX_OUTPUT) throw new Error('Bundled hook is too large');
+  if (output.includes(root) || output.includes('node_modules') || /\bnode:/.test(output)) {
+    throw new Error('Bundled hook leaked a build path or Node module reference');
+  }
+  const parsed = ts.createSourceFile('bundle.js', output, ts.ScriptTarget.ES2020, true, ts.ScriptKind.JS);
+  const isPropertyName = node =>
+    (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+    || (ts.isBindingElement(node.parent) && node.parent.propertyName === node)
+    || (ts.isPropertyDeclaration(node.parent) && node.parent.name === node)
+    || ((ts.isPropertyAssignment(node.parent) || ts.isMethodDeclaration(node.parent)
+      || ts.isGetAccessorDeclaration(node.parent) || ts.isSetAccessorDeclaration(node.parent))
+      && node.parent.name === node);
+  const walk = node => {
+    if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) || ts.isExportDeclaration(node)
+        || ts.isExportAssignment(node) || node.kind === ts.SyntaxKind.ImportKeyword || ts.isMetaProperty(node)
+        || (ts.isIdentifier(node) && !isPropertyName(node) && LEFTOVER_IDENTIFIERS.has(node.text))) {
+      throw new Error(`Bundled hook contains an unresolved or unsupported reference near: ${node.getText(parsed).slice(0, 40)}`);
+    }
+    ts.forEachChild(node, walk);
+  };
+  walk(parsed);
+}
 
 function staticHooks(source, checker, namespace, globalObject) {
   const calls = [];
@@ -139,15 +235,17 @@ function legacyHostValues(source, checker, namespace) {
   walk(source, source);
 }
 
-function compile(file, sdk, legacyHooks = [], routed = false) {
+async function compile(file, sdk, legacyHooks = [], routed = false) {
   regular(file);
+  const importNode = routed ? approvedImport(ts.createSourceFile(file, fs.readFileSync(file, 'utf8'), options.target, true)) : null;
+  const programOptions = importNode ? importOptions : options;
   const checkFile = path.join(root, '__interceptor_hook_check.ts');
   const checkText = legacyHooks.map(hook => `const __interceptorCheck_${hook}: (event: Interceptor.Event, config: Interceptor.Config) => Interceptor.Result = ${hook};`).join('\n');
-  const host = ts.createCompilerHost(options);
+  const host = ts.createCompilerHost(programOptions);
   const originalGetSourceFile = host.getSourceFile.bind(host);
   host.getSourceFile = (name, version, onError, shouldCreate) => name === checkFile
     ? ts.createSourceFile(name, checkText, version, true) : originalGetSourceFile(name, version, onError, shouldCreate);
-  const program = ts.createProgram([file, sdk, checkFile], options, host);
+  const program = ts.createProgram([file, sdk, checkFile], programOptions, host);
   const source = program.getSourceFile(file);
   for (const authored of [source, program.getSourceFile(sdk)]) {
     if (authored.libReferenceDirectives.length || authored.typeReferenceDirectives.length || authored.hasNoDefaultLib
@@ -155,8 +253,10 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
       throw new Error(`${file}: only the supplied SDK reference is supported; plugins must be self-contained`);
     }
   }
+  const declaration = importNode ? dependencyFile(DEPENDENCY.declaration, DEPENDENCY.declarationSha256).real : null;
   for (const input of program.getSourceFiles()) {
-    if (![file, sdk, checkFile].includes(input.fileName) && !program.isSourceFileDefaultLibrary(input)) {
+    if (![file, sdk, checkFile].includes(input.fileName) && !program.isSourceFileDefaultLibrary(input)
+        && !(declaration && fs.realpathSync(input.fileName) === declaration)) {
       throw new Error(`${file}: additional TypeScript dependencies are not emitted; keep this plugin self-contained`);
     }
   }
@@ -170,6 +270,9 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
   const namespace = sdkFile.statements.find(node => ts.isModuleDeclaration(node) && node.name.text === 'Interceptor');
   const fetchDeclaration = sdkFile.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'fetch');
   const fetchSymbol = checker.getSymbolAtLocation(fetchDeclaration.name);
+  const hashBinding = importNode
+    ? source.statements.find(ts.isImportDeclaration).importClause.namedBindings.elements[0].name : null;
+  const hashSymbol = hashBinding ? checker.getSymbolAtLocation(hashBinding) : null;
   const globalObject = checker.getSymbolsInScope(source, ts.SymbolFlags.Value).find(symbol => symbol.getName() === 'globalThis');
   if (!routed) legacyHostValues(source, checker, checker.getSymbolAtLocation(namespace.name));
   const routedResult = routed ? staticHooks(source, checker, checker.getSymbolAtLocation(namespace.name), globalObject) : null;
@@ -180,6 +283,7 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     ts.SyntaxKind.PropertyDeclaration, ts.SyntaxKind.MethodDeclaration, ts.SyntaxKind.PropertySignature,
     ts.SyntaxKind.MethodSignature, ts.SyntaxKind.GetAccessor, ts.SyntaxKind.SetAccessor].includes(declaration.kind);
   function inspect(node) {
+    if (importNode && ts.isImportDeclaration(node) && node.pos === importNode.pos && node.end === importNode.end) return;
     if (ts.isImportDeclaration(node) || ts.isImportEqualsDeclaration(node) || ts.isExportDeclaration(node)
         || ts.isExportAssignment(node) || ts.isImportTypeNode(node) || node.kind === ts.SyntaxKind.ImportKeyword
         || node.modifiers?.some(m => m.kind === ts.SyntaxKind.ExportKeyword)) {
@@ -194,6 +298,18 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
       throw new Error(`${file}: async generators and for await are unavailable in this host`);
     }
     if (ts.isIdentifier(node)) {
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent) : checker.getSymbolAtLocation(node);
+      if (hashSymbol && symbol === hashSymbol) {
+        if (!ts.isCallExpression(node.parent) || node.parent.expression !== node || node.parent.arguments.length !== 1) {
+          throw new Error(`${file}: sha256 must be called directly with one string; its other methods and aliases are unavailable`);
+        }
+        const argumentType = checker.getTypeAtLocation(node.parent.arguments[0]);
+        if ((argumentType.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown))
+            || !checker.isTypeAssignableTo(argumentType, checker.getStringType())) {
+          throw new Error(`${file}: sha256 takes a string`);
+        }
+      }
       const typeUse = ts.isTypeReferenceNode(node.parent) && node.parent.typeName === node;
       const allowedHere = inLeave(node) && ((node.text === 'Promise' && typeUse) || node.text === 'Uint8Array');
       if (forbidden.has(node.text) && !allowedHere) {
@@ -224,7 +340,8 @@ function compile(file, sdk, legacyHooks = [], routed = false) {
     output.code = contents;
   });
   if (result.emitSkipped || output.code === undefined) throw new Error(`Compilation failed: ${file}`);
-  return { code: output.code, hooks, usesFiles: routedResult?.usesFiles ?? false };
+  const code = importNode ? await bundle(output.code) : output.code;
+  return { code, hooks, usesFiles: routedResult?.usesFiles ?? false };
 }
 
 try {
@@ -243,7 +360,7 @@ try {
       if (manifest.schemaVersion !== 1) throw new Error(`${entry}: use plugins/NAME/hooks for new plugins`);
       const hooks = ['request', 'response'].filter(leg => manifest.subscriptions.some(s => s.phase.startsWith(leg + '.')))
         .map(leg => leg === 'request' ? 'onRequest' : 'onResponse');
-      outputs[name] = compile(path.join(sourceDir, entry), sdk, hooks).code;
+      outputs[name] = (await compile(path.join(sourceDir, entry), sdk, hooks)).code;
     }
   }
   if (fs.existsSync(path.join(root, 'plugins'))) {
@@ -252,16 +369,17 @@ try {
     for (const [name, plugin] of Object.entries(discovered)) {
       if (name in outputs) throw new Error(`Duplicate plugin basename: ${name}`);
       const sourceFiles = {};
-      const matches = plugin.routes.map(route => {
-        const result = compile(path.join(root, 'plugins', name, route.file), sdk, [], true);
+      const matches = [];
+      for (const route of plugin.routes) {
+        const result = await compile(path.join(root, 'plugins', name, route.file), sdk, [], true);
         if (result.usesFiles && plugin.metadata.write?.files !== true) {
           throw new Error(`plugins/${name}/${route.file}: Interceptor.createFile requires write.files: true in plugin.json`);
         }
         sourceFiles[route.emitted] = result.code;
         const hooks = Object.fromEntries(Object.entries(result.hooks).map(([leg, callbacks]) =>
           [leg, Object.fromEntries(Object.keys(callbacks).map(phase => [phase, route.emitted]))]));
-        return { hosts: [route.host], methods: [route.method], path: { kind: 'exact', value: route.path }, hooks };
-      });
+        matches.push({ hosts: [route.host], methods: [route.method], path: { kind: 'exact', value: route.path }, hooks });
+      }
       outputs[name] = { manifest: { ...plugin.metadata, matches }, sourceFiles };
     }
   }

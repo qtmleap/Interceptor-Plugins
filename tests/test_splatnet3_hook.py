@@ -6,7 +6,16 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = Path(os.environ.get('SPLATNET3_TEST_SOURCE', str(ROOT / 'plugins/splatnet3-salmon/hooks/api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens/POST.ts')))
+SOURCE = Path(os.environ.get('SPLATNET3_TEST_SOURCE', str(ROOT / 'build/scripts/splatnet3-salmon/hooks/api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens/POST.js')))
+
+
+def setUpModule():
+    if 'SPLATNET3_TEST_SOURCE' not in os.environ:
+        build = subprocess.run(['bun', 'run', 'build'], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        if build.returncode != 0:
+            raise RuntimeError(build.stdout + build.stderr)
+
+
 VERSION = '4.0.0-091d4283'
 HISTORY = '0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f'
 DETAIL = '824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602'

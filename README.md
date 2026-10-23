@@ -34,13 +34,14 @@ For live traffic, users must inspect the source and grants and approve the exact
 
 ## Development container
 
-The [development container](docs/devcontainer.md) uses `qtmleap/devcontainers` with pinned Bun and Python. Open it with **Dev Containers: Reopen in Container**, then run `bun run check`. Authoring, emulation, signing setup and publishing work on Linux.
+The [development container](docs/devcontainer.md) uses `qtmleap/devcontainers` with pinned Bun and Python. Open it with **Dev Containers: Reopen in Container**, initialize the rules with `git submodule update --init biome-plugins`, then run `bun run check`. Authoring, emulation, signing setup and publishing work on Linux.
 
 ## Run the checks
 
 Use Bun (the version in `.bun-version`), Python 3, OpenSSL, Git, Rust 1.74 or later and a C compiler on Linux or macOS. Xcode is not required. From this checkout:
 
 ```sh
+git submodule update --init biome-plugins
 bun install --frozen-lockfile --ignore-scripts
 bun run check
 ```
@@ -65,6 +66,7 @@ Run `bun run check` first. Rerun `build` after editing sources; it preserves the
 2. On Linux or macOS with GitHub CLI authenticated as a repository administrator, run:
 
    ```sh
+   git submodule update --init biome-plugins
    bun install --frozen-lockfile --ignore-scripts
    bun run setup
    bun run check
