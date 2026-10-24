@@ -135,7 +135,7 @@ async function bundle(code, file) {
           throw new Error(`Unsupported package asset ${args.path}: only JavaScript, TypeScript and JSON can be bundled`);
         }
         const contents = fs.readFileSync(args.path, 'utf8');
-        if (/\brequire\s*\(|\bimport\s*[.(]/.test(contents)) checkRuntimeLoading(contents, args.path);
+        if (!args.path.endsWith('.json')) checkRuntimeLoading(contents, args.path);
         packageNotices(args.path, packages);
       });
     } }],

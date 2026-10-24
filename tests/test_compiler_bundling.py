@@ -73,19 +73,32 @@ class BundlingTests(Case):
         self.assertEqual(self.fetch_result(output), 'transitive')
 
     def test_constant_template_literal_require_is_bundled(self):
-        package = self.package('exports.value = require(`./value.js`);', type='commonjs')
-        package['value.js'] = "module.exports = function(){return 'static-require';};"
-        result, output = self.compile("import {value} from 'fixture-lib';", 'value()', {'fixture-lib': package})
-        self.ok(result)
-        self.assertEqual(self.fetch_result(output), 'static-require')
+        for index, gap in enumerate(['', ' /* static dependency */ ']):
+            with self.subTest(gap=gap):
+                package = self.package('exports.value = require' + gap + '(`./value.js`);', type='commonjs')
+                package['value.js'] = "module.exports = function(){return 'static-require';};"
+                result, output = self.compile("import {value} from 'fixture-lib';", 'value()',
+                                              {'fixture-lib': package}, f'require-{index}')
+                self.ok(result)
+                self.assertEqual(self.fetch_result(output), 'static-require')
 
     def test_constant_template_literal_dependency_import_is_bundled(self):
-        package = self.package('export async function value(){return (await import(`./value.js`)).value;}',
-                               'export function value(): Promise<string>;')
-        package['value.js'] = "export const value='static-import';"
-        result, output = self.compile("import {value} from 'fixture-lib';", 'await value()', {'fixture-lib': package})
+        for index, gap in enumerate(['', ' /* static dependency */ ']):
+            with self.subTest(gap=gap):
+                package = self.package('export async function value(){return (await import' + gap + '(`./value.js`)).value;}',
+                                       'export function value(): Promise<string>;')
+                package['value.js'] = "export const value='static-import';"
+                result, output = self.compile("import {value} from 'fixture-lib';", 'await value()',
+                                              {'fixture-lib': package}, f'import-{index}')
+                self.ok(result)
+                self.assertEqual(self.fetch_result(output), 'static-import')
+
+    def test_json_dependency_loading_words_are_data(self):
+        package = self.package("export {default as value} from './value.json';", 'export const value: {text: string};')
+        package['value.json'] = '{"text":"require(key); import.meta"}'
+        result, output = self.compile("import {value} from 'fixture-lib';", 'value.text', {'fixture-lib': package})
         self.ok(result)
-        self.assertEqual(self.fetch_result(output), 'static-import')
+        self.assertEqual(self.fetch_result(output), 'require(key); import.meta')
 
     def test_feature_detection_locals_and_standard_function_work_in_quickjs(self):
         source = "export function value(){ const Buffer = 'local'; return typeof process !== 'undefined' ? process.platform : Buffer + Function('return 7')(); }"
@@ -244,12 +257,19 @@ class BundlingTests(Case):
             ('runtime', 'export function value(){return process.pid;}', {}),
             ('native', "import addon from './addon.node'; export function value(){return addon;}", {'addon.node': 'binary'}),
             ('dynamic', 'export function value(key){return require(key);}', {}),
+            ('commented-dynamic', 'export function value(key){return require /* dependency loader */ (key);}', {}),
+            ('escaped-dynamic', r'export function value(key){return requ\u0069re(key);}', {}),
+            ('commented-meta', 'export function value(){return import /* dependency metadata */ .meta.url;}', {}),
         ]:
             with self.subTest(name=name):
                 package = self.package(source, 'export function value(key?: string): string;')
                 package.update(files)
                 result, output = self.compile("import {value} from 'fixture-lib';", 'value()', {'fixture-lib': package}, name)
                 self.fails(result)
+                if name in ('commented-dynamic', 'escaped-dynamic'):
+                    self.assertIn('Unsupported runtime module loading', result.stderr)
+                elif name == 'commented-meta':
+                    self.assertIn('Unsupported import.meta', result.stderr)
                 self.assertFalse(output.exists())
 
     def test_bundle_budget_includes_dependencies(self):
