@@ -126,22 +126,21 @@ Interceptor.attach({
       const ids = historyIDs(parseJSON(historyText))
       await save(HISTORY_PATH, historyText)
 
-      const acquired: string[] = []
-      const unavailable: string[] = []
+      const counts = { acquired: 0, unavailable: 0 }
       for (const id of ids.slice(0, limit)) {
         const reply = await post(pair.detail, { coopHistoryDetailId: id })
-        if (reply.status === 404) { unavailable.push(id); continue }
+        if (reply.status === 404) { counts.unavailable += 1; continue }
         checkStatus(reply.status)
         const text = await reply.text()
-        if (!detailAvailable(parseJSON(text), id)) { unavailable.push(id); continue }
+        if (!detailAvailable(parseJSON(text), id)) { counts.unavailable += 1; continue }
         // Save the original response; a failed save stops the chain.
         await save(detailPath(id), text)
-        acquired.push(id)
+        counts.acquired += 1
       }
       // Existing diagnostic action; not an HTTP send. Never include the token or result bodies.
       return { actions: [{
         type: 'webhook', endpointId: '8B71B789-357C-44D8-AF3A-1D8192234BB5',
-        json: { version, acquired, unavailable, remaining: Math.max(0, ids.length - limit) },
+        json: { version, ...counts, remaining: Math.max(0, ids.length - limit) },
       }] }
     },
   },

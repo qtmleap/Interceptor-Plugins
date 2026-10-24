@@ -72,6 +72,21 @@ class BundlingTests(Case):
         self.ok(result)
         self.assertEqual(self.fetch_result(output), 'transitive')
 
+    def test_constant_template_literal_require_is_bundled(self):
+        package = self.package('exports.value = require(`./value.js`);', type='commonjs')
+        package['value.js'] = "module.exports = function(){return 'static-require';};"
+        result, output = self.compile("import {value} from 'fixture-lib';", 'value()', {'fixture-lib': package})
+        self.ok(result)
+        self.assertEqual(self.fetch_result(output), 'static-require')
+
+    def test_constant_template_literal_dependency_import_is_bundled(self):
+        package = self.package('export async function value(){return (await import(`./value.js`)).value;}',
+                               'export function value(): Promise<string>;')
+        package['value.js'] = "export const value='static-import';"
+        result, output = self.compile("import {value} from 'fixture-lib';", 'await value()', {'fixture-lib': package})
+        self.ok(result)
+        self.assertEqual(self.fetch_result(output), 'static-import')
+
     def test_feature_detection_locals_and_standard_function_work_in_quickjs(self):
         source = "export function value(){ const Buffer = 'local'; return typeof process !== 'undefined' ? process.platform : Buffer + Function('return 7')(); }"
         result, output = self.compile("import {value as run} from 'fixture-lib';", 'run()', {'fixture-lib': self.package(source)})
@@ -293,3 +308,37 @@ class BundlingTests(Case):
         result, output = self.compile("import 'fixture-lib';", "({} as {fixtureValue: string}).fixtureValue", {'fixture-lib': package})
         self.ok(result)
         self.assertEqual(self.fetch_result(output), 'initialized')
+
+
+class EditorConfigurationTests(Case):
+    def tsc(self, project):
+        return subprocess.run(['bun', str(REPO / 'node_modules/typescript/bin/tsc'),
+                               '--noEmit', '--project', str(project)],
+                              cwd=REPO, capture_output=True, text=True, timeout=30)
+
+    def test_workspace_project_resolves_the_checked_in_package_imports(self):
+        self.ok(self.tsc(REPO / 'tsconfig.json'))
+
+    def test_inherited_editor_options_support_commonjs_and_browser_types(self):
+        root = self.tmp / 'editor'
+        modules = root / 'node_modules'
+        modules.mkdir(parents=True)
+        for name in ['js-sha256', 'fast-json-stable-stringify']:
+            (modules / name).symlink_to(REPO / 'node_modules' / name, target_is_directory=True)
+        browser = modules / 'editor-browser-types'
+        browser.mkdir()
+        (browser / 'package.json').write_text(json.dumps({'name': 'editor-browser-types', 'version': '1.0.0',
+            'exports': {'.': {'browser': './browser.d.ts', 'default': './node.d.ts'}}}))
+        (browser / 'browser.d.ts').write_text("export declare const platform: 'browser';")
+        (browser / 'node.d.ts').write_text("export declare const platform: 'node';")
+        (root / 'editor.ts').write_text("""import {sha256} from 'js-sha256';
+import stringify from 'fast-json-stable-stringify';
+import {platform} from 'editor-browser-types';
+const browserOnly: 'browser' = platform;
+const text: string = stringify({hash: sha256(browserOnly)});
+Interceptor.attach({response: {onLeave() { stringify(text); }}});
+""")
+        project = root / 'tsconfig.json'
+        project.write_text(json.dumps({'extends': str(REPO / 'tsconfig.json'), 'include': [],
+            'files': [str(REPO / 'types/interceptor.d.ts'), 'editor.ts']}))
+        self.ok(self.tsc(project))

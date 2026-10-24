@@ -226,7 +226,7 @@ function checkRuntimeLoading(contents, name) {
     if (ts.isCallExpression(node)) {
       const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      if ((requireCall || dynamicImport) && (node.arguments.length !== 1 || !ts.isStringLiteral(node.arguments[0]))) {
+      if ((requireCall || dynamicImport) && (node.arguments.length !== 1 || !ts.isStringLiteralLike(node.arguments[0]))) {
         const symbol = requireCall ? checker.getSymbolAtLocation(node.expression) : null;
         if (!symbol?.declarations?.some(declaration => declaration.getSourceFile() === parsed)) {
           throw new Error(`Unsupported runtime module loading in ${name}: use a static package dependency`);

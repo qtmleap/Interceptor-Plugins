@@ -74,7 +74,7 @@ class SalmonHookTests(unittest.TestCase):
         self.assertEqual([b['variables']['coopHistoryDetailId'] for b in bodies[1:]], ['d1', 'd2'])
         self.assertTrue(all(b['extensions']['persistedQuery']['sha256Hash'] == DETAIL for b in bodies[1:]))
         summary = out['result']['actions'][0]['json']
-        self.assertEqual(summary['acquired'], ['d1', 'd2'])
+        self.assertEqual(summary['acquired'], 2)
         self.assertNotIn('synthetic-token', json.dumps(summary))
 
     def test_match_scoped_player_ids_do_not_stop_later_result_saves(self):
@@ -134,8 +134,8 @@ class SalmonHookTests(unittest.TestCase):
                            {'status': 404, 'body': {}}, {'status': 200, 'body': detail('d2')}])
         self.assertTrue(out['ok'], out)
         summary = out['result']['actions'][0]['json']
-        self.assertEqual(summary['unavailable'], ['d1'])
-        self.assertEqual(summary['acquired'], ['d2'])
+        self.assertEqual(summary['unavailable'], 1)
+        self.assertEqual(summary['acquired'], 1)
 
     def test_graphql_error_stops_before_details(self):
         out = run(replies=[{'status': 200, 'body': {'errors': [{'message': 'PersistedQueryNotFound'}]}}])
@@ -173,7 +173,7 @@ class SalmonHookTests(unittest.TestCase):
     def test_null_detail_and_non_json_http_errors(self):
         out = run(replies=[{'status': 200, 'body': history(['d1'])},
                            {'status': 200, 'body': {'data': {'coopHistoryDetail': None}}}])
-        self.assertEqual(out['result']['actions'][0]['json']['unavailable'], ['d1'])
+        self.assertEqual(out['result']['actions'][0]['json']['unavailable'], 1)
         for status, code in [(401, 'recapture'), (403, 'recapture'), (429, 'http'), (503, 'http')]:
             out = run(replies=[{'status': status, 'body': 'not JSON'}])
             self.assertEqual(out['code'], code)

@@ -126,6 +126,7 @@ The runtime produces `mutation`; callback authors only edit `body`. Use `expectE
 ## Build and validate
 
 ```sh
+git submodule update --init biome-plugins
 bun install --frozen-lockfile --ignore-scripts
 bun run build
 bun run check:authoring

@@ -14,7 +14,7 @@ class MinimalAcquisitionTests(unittest.TestCase):
         out = fx.run(replies=[{'status': 200, 'body': fx.history(['d1'])}, {'status': 200, 'body': raw}])
         self.assertTrue(out['ok'], out)
         self.assertEqual(out['saves'][1]['contents'], raw)
-        self.assertEqual(out['result']['actions'][0]['json']['acquired'], ['d1'])
+        self.assertEqual(out['result']['actions'][0]['json']['acquired'], 1)
 
     def test_unconsumed_player_shapes_do_not_block_acquisition(self):
         for player in [None, {}, {'id': 7}, {'id': ''}]:

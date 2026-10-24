@@ -44,3 +44,5 @@ configured request limit. Gameplay/player fields are stored without schema
 validation. IDs are opaque nonempty strings; filenames remain fixed SHA-256
 hex digests, and native request/body limits still apply. Detailed validation
 belongs downstream. Response text is saved as received, including unknown fields.
+The diagnostic action reports version and acquired/unavailable/remaining counts,
+keeping its size independent of opaque ID lengths and within the native result budget.
