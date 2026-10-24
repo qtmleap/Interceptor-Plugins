@@ -32,6 +32,7 @@ import unicodedata
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import fetch_previous  # noqa: E402
+import plugin_icons  # noqa: E402
 from repository_config import (ToolError, UsageError, UUID_RE, _SEMVER, _list_dir, canonical_url,  # noqa: E402
                                check_uuid, is_display_name, is_int, load_config, load_json, parse_args,
                                read_regular, require_exact_keys, run_main, validate_manifest,
@@ -336,9 +337,15 @@ def validate_package(data, entry=None, what="package"):
     validate_manifest(manifest, what)
     if manifest['schemaVersion'] == 2:
         from repository_config import validate_source_files
-        require_exact_keys(package, ('manifest', 'sourceFiles'), what)
+        require_exact_keys(package, ('manifest', 'sourceFiles') + (('assets',) if 'assets' in package else ()), what)
         validate_source_files(manifest, package['sourceFiles'], what)
+        try:
+            plugin_icons.validate_package_assets(manifest, package, package['sourceFiles'])
+        except plugin_icons.IconError as error:
+            raise ToolError(f'{what}: {error}')
     else:
+        if 'icon' in manifest:
+            raise ToolError(f'{what}: schema 1 cannot carry an icon')
         require_exact_keys(package, ('manifest', 'source'), what)
         if not isinstance(package['source'], str) or len(package['source'].encode('utf-8')) > MAX_SOURCE:
             raise ToolError(f'{what}: invalid source')
@@ -772,7 +779,7 @@ def generated_sources(directory, root):
 
 
 def samples(root, directory):
-    root, directory = Path(root), Path(directory)
+    root, directory = Path(root).resolve(), Path(directory)
     config = load_configuration(root)
     config_json = read_regular(root / "fixtures" / "config.json", MAX_CONFIG)
     packages = {}
@@ -783,6 +790,14 @@ def samples(root, directory):
             scripts = generated_sources(root / script_directory / name, root)
             if package["sourceFiles"] != scripts:
                 raise ToolError(f"plugins/{name}.json: sourceFiles differ from {script_directory}/{name}/")
+            icon = package["manifest"].get("icon")
+            try:
+                authored = None if icon is None else base64.b64encode(
+                    plugin_icons.read_icon_file(root / "plugins" / name, icon, repository_root=root)).decode("ascii")
+            except plugin_icons.IconError as error:
+                raise ToolError(f"plugins/{name}.json: {error}")
+            if package.get("assets") != (None if authored is None else {icon: authored}):
+                raise ToolError(f"plugins/{name}.json: assets differ from the authored icon")
         else:
             script_directory = "build/scripts" if (root / "src").exists() else "scripts"
             script = read_regular(root / script_directory / f"{name}.js", MAX_SOURCE)

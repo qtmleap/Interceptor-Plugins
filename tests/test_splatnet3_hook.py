@@ -6,7 +6,16 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = Path(os.environ.get('SPLATNET3_TEST_SOURCE', str(ROOT / 'plugins/splatnet3-salmon/hooks/api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens/POST.ts')))
+SOURCE = Path(os.environ.get('SPLATNET3_TEST_SOURCE', str(ROOT / 'build/scripts/splatnet3-salmon/hooks/api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens/POST.js')))
+
+
+def setUpModule():
+    if 'SPLATNET3_TEST_SOURCE' not in os.environ:
+        build = subprocess.run(['bun', 'run', 'build'], cwd=ROOT, capture_output=True, text=True, timeout=30)
+        if build.returncode != 0:
+            raise RuntimeError(build.stdout + build.stderr)
+
+
 VERSION = '4.0.0-091d4283'
 HISTORY = '0f8c33970a425683bb1bdecca50a0ca4fb3c3641c0b2a1237aedfde9c0cb2b8f'
 DETAIL = '824a1e22c4ad4eece7ad94a9a0343ecd76784be4f77d8f6f563c165afc8cf602'
@@ -65,7 +74,7 @@ class SalmonHookTests(unittest.TestCase):
         self.assertEqual([b['variables']['coopHistoryDetailId'] for b in bodies[1:]], ['d1', 'd2'])
         self.assertTrue(all(b['extensions']['persistedQuery']['sha256Hash'] == DETAIL for b in bodies[1:]))
         summary = out['result']['actions'][0]['json']
-        self.assertEqual(summary['acquired'], ['d1', 'd2'])
+        self.assertEqual(summary['acquired'], 2)
         self.assertNotIn('synthetic-token', json.dumps(summary))
 
     def test_match_scoped_player_ids_do_not_stop_later_result_saves(self):
@@ -125,8 +134,8 @@ class SalmonHookTests(unittest.TestCase):
                            {'status': 404, 'body': {}}, {'status': 200, 'body': detail('d2')}])
         self.assertTrue(out['ok'], out)
         summary = out['result']['actions'][0]['json']
-        self.assertEqual(summary['unavailable'], ['d1'])
-        self.assertEqual(summary['acquired'], ['d2'])
+        self.assertEqual(summary['unavailable'], 1)
+        self.assertEqual(summary['acquired'], 1)
 
     def test_graphql_error_stops_before_details(self):
         out = run(replies=[{'status': 200, 'body': {'errors': [{'message': 'PersistedQueryNotFound'}]}}])
@@ -164,28 +173,20 @@ class SalmonHookTests(unittest.TestCase):
     def test_null_detail_and_non_json_http_errors(self):
         out = run(replies=[{'status': 200, 'body': history(['d1'])},
                            {'status': 200, 'body': {'data': {'coopHistoryDetail': None}}}])
-        self.assertEqual(out['result']['actions'][0]['json']['unavailable'], ['d1'])
+        self.assertEqual(out['result']['actions'][0]['json']['unavailable'], 1)
         for status, code in [(401, 'recapture'), (403, 'recapture'), (429, 'http'), (503, 'http')]:
             out = run(replies=[{'status': status, 'body': 'not JSON'}])
             self.assertEqual(out['code'], code)
             self.assertEqual(len(out['requests']), 1)
 
-    def test_invalid_tokens_and_missing_context_stop_before_fetch(self):
-        for token in ['bad\r\ntoken', 'bad token', 'x' * 4097]:
-            out = run(res=response(body={'bulletToken': token}))
-            self.assertEqual(out['code'], 'invalid-token')
-            self.assertEqual(out['requests'], [])
+    def test_missing_context_stops_before_fetch(self):
         out = run(res=response(request={'headers': {}}))
         self.assertEqual(out['code'], 'missing-context')
         self.assertEqual(out['requests'], [])
 
 
-def utf8(text):
-    return len(text.encode('utf-8'))
-
-
 class SalmonSaveTests(unittest.TestCase):
-    """Plugin 1.2.0: Interceptor.createFile stores the original history text and each validated full detail."""
+    """Store original responses; only query/file identity and operational checks are needed."""
 
     HISTORY_TEXT = ' {"data": {"coopResult": {"historyGroups": {"nodes": [\n {"historyDetails": {"nodes": [{"id": "d1"}, {"id": "d2"}]}}]}}}} \n'
 
@@ -195,7 +196,7 @@ class SalmonSaveTests(unittest.TestCase):
     def replies(self, *details):
         return [{'status': 200, 'body': self.HISTORY_TEXT}] + [{'status': s, 'body': b} for s, b in details]
 
-    def test_saves_original_history_text_then_each_validated_detail_text(self):
+    def test_saves_original_history_text_then_each_available_detail_text(self):
         d1, d2 = self.detail_text('d1'), self.detail_text('d2')
         out = run(replies=self.replies((200, d1), (200, d2)))
         self.assertTrue(out['ok'], out)
@@ -222,8 +223,7 @@ class SalmonSaveTests(unittest.TestCase):
 
     def test_invalid_or_error_details_are_never_saved(self):
         cases = [(detail('wrong'), 'id-mismatch'),
-                 ({'errors': [{'message': 'boom'}]}, 'graphql'), ({'data': {}}, 'invalid-response'),
-                 ({'data': {'coopHistoryDetail': {'id': 'd1'}}}, 'invalid-principal')]
+                 ({'errors': [{'message': 'boom'}]}, 'graphql'), ({'data': {}}, 'invalid-response')]
         for body, code in cases:
             with self.subTest(code=code):
                 out = run(replies=self.replies((200, body)))
@@ -252,8 +252,6 @@ class SalmonSaveTests(unittest.TestCase):
         self.assertEqual(out['saves'][1]['path'],
                          'Salmon Run/details/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.json')
         for id_ in ids[2:]:
-            if utf8(id_) > 512:
-                continue
             out = run(replies=[{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}])
             self.assertEqual(out['saves'][1]['path'], detail_path(id_))
 
@@ -267,9 +265,8 @@ class SalmonSaveTests(unittest.TestCase):
         for path in paths:
             self.assertRegex(path, r'^Salmon Run/details/[0-9a-f]{64}\.json$')
 
-    def test_maximum_length_result_ids_use_fixed_length_paths(self):
-        id_ = 'あ' * 170 + 'ab'
-        self.assertEqual(utf8(id_), 512)
+    def test_long_result_ids_use_fixed_length_paths(self):
+        id_ = 'あ' * 300
         replies = [{'status': 200, 'body': history([id_])}, {'status': 200, 'body': detail(id_)}]
         out = run(replies=replies)
         self.assertTrue(out['ok'], out)

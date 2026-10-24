@@ -3,6 +3,7 @@
 Everything here is strict and fails closed: duplicate JSON keys, symlinks, unknown fields and
 malformed values are errors. No network access, no keys.
 """
+import base64
 import json
 import math
 import os
@@ -14,6 +15,8 @@ import sys
 import unicodedata
 import uuid
 from pathlib import Path
+
+import plugin_icons
 
 OFFICIAL_REPOSITORY = "qtmleap/Interceptor-Plugins"
 BASELINE_IDS = ("90A213C0-9D3C-47F5-ABB8-C15C7472E2AD", "76532D8C-608A-4EA3-AC16-755BABF2AB7E",
@@ -488,7 +491,7 @@ def validate_manifest(m, what):
     tail = ("read", "endpointBindings", "settings")
     optional = tuple(key for key in DISPLAY_METADATA_KEYS + (PUBLISHED_AT_KEY,) if isinstance(m, dict) and key in m)
     if version == 2:
-        optional += tuple(key for key in ("outbound",) if isinstance(m, dict) and key in m)
+        optional += tuple(key for key in ("outbound", "icon") if isinstance(m, dict) and key in m)
         require_exact_keys(m, common + ("matches", "read", "write", "endpointBindings", "settings") + optional, what)
     else:
         require_exact_keys(m, common + ("subscriptions",) + tail + optional, what)
@@ -496,6 +499,8 @@ def validate_manifest(m, what):
     validate_published_at(m, what)
     if "outbound" in m:
         validate_outbound(m["outbound"], what + " outbound")
+    if "icon" in m and not plugin_icons.valid_icon_path(m["icon"]):
+        _fail(what, "icon must be a source-style path ending in .png or .webp")
     check_uuid(m["id"], f"{what} id")
     if not is_display_name(m["name"]):
         _fail(what, "invalid name")
@@ -755,11 +760,36 @@ def load_samples(root):
     return samples
 
 
-def package_bytes(manifest, source):
+def load_icon_assets(root, samples):
+    """{name: {icon path: base64}} for schema 2 samples with an authored icon, read from plugins/NAME/<icon>."""
+    root = Path(root).resolve()
+    result = {}
+    for name, manifest, _ in samples:
+        icon = manifest.get('icon') if manifest['schemaVersion'] == 2 else None
+        if icon is None:
+            continue
+        try:
+            data = plugin_icons.read_icon_file(root / 'plugins' / name, icon, repository_root=root)
+            plugin_icons.validate_icon_bytes(icon, data)
+        except plugin_icons.IconError as error:
+            raise ToolError(f'plugins/{name}: {error}')
+        result[name] = {icon: base64.b64encode(data).decode('ascii')}
+    return result
+
+
+def package_bytes(manifest, source, assets=None):
     if manifest['schemaVersion'] == 2:
         validate_source_files(manifest, source, 'package')
         package = {'manifest': manifest, 'sourceFiles': source}
+        if assets is not None:
+            package['assets'] = assets
+        try:
+            plugin_icons.validate_package_assets(manifest, package, source)
+        except plugin_icons.IconError as error:
+            raise ToolError(f'package: {error}')
     else:
+        if assets is not None:
+            raise ToolError('package: schema 1 cannot carry assets')
         package = {'manifest': manifest, 'source': source}
     data = json.dumps(package, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
     if len(data) > MAX_PACKAGE_BYTES:

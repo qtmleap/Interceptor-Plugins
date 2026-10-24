@@ -206,9 +206,9 @@ class CreateFileCompilerTests(Case):
 
 
 class SalmonManifestTests(unittest.TestCase):
-    def test_plugin_1_2_0_requests_files_write(self):
+    def test_salmon_plugin_requests_files_write(self):
         manifest = json.loads((REPO / 'plugins/splatnet3-salmon/plugin.json').read_text())
-        self.assertEqual(manifest['version'], '1.2.0')
+        self.assertEqual(manifest['version'], '1.2.1')
         self.assertEqual(manifest['publishedAt'], '2026-10-24T00:00:00Z')
         self.assertIs(manifest['write']['files'], True)
         self.assertIs(manifest['write']['requestBody'], False)

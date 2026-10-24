@@ -282,7 +282,7 @@ def check_files(root, state, *, apply=False):
             validate_config(value)
         elif is_authored:
             required = ('schemaVersion', 'id', 'name', 'version', 'read', 'write', 'endpointBindings', 'settings')
-            optional = tuple(key for key in (*DISPLAY_METADATA_KEYS, PUBLISHED_AT_KEY, 'outbound') if isinstance(value, dict) and key in value)
+            optional = tuple(key for key in (*DISPLAY_METADATA_KEYS, PUBLISHED_AT_KEY, 'outbound', 'icon') if isinstance(value, dict) and key in value)
             require_exact_keys(value, required + optional, name)
             if value['schemaVersion'] != 2:
                 raise ToolError('authored plugin checkpoint requires schemaVersion 2')

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """python3 tools/build.py --root ROOT --output DIRECTORY
 
-Writes plugins/NAME.json (deterministic schema 1 or schema 2 packages) and an empty .nojekyll.
+Writes plugins/NAME.json (deterministic schema 1 or schema 2 packages, with the optional bundled icon as `assets`) and an empty .nojekyll.
 No keys, publisher or network. The output directory must be absent or empty and is created atomically.
 """
 import os
@@ -9,7 +9,7 @@ import shutil
 import uuid
 from pathlib import Path
 
-from repository_config import ToolError, load_samples, package_bytes, parse_args, run_main
+from repository_config import ToolError, load_icon_assets, load_samples, package_bytes, parse_args, run_main
 
 
 def checked_output(root, output):
@@ -37,7 +37,9 @@ def main(argv):
     if not root.is_dir():
         raise ToolError(f"root is not a directory: {root}")
     output = checked_output(root, options["--output"])
-    packages = {name: package_bytes(manifest, source) for name, manifest, source in load_samples(root)}
+    samples = load_samples(root)
+    assets = load_icon_assets(root, samples)
+    packages = {name: package_bytes(manifest, source, assets.get(name)) for name, manifest, source in samples}
 
     temp = output.parent / f".{output.name}.{uuid.uuid4().hex}.tmp"
     try:

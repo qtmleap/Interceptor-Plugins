@@ -25,6 +25,10 @@ func readRegular(_ path: String, limit: Int) throws -> Data {
     let fd = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
     guard fd >= 0 else { throw Fail(message: "cannot open \(path): \(String(cString: strerror(errno)))") }
     defer { close(fd) }
+    return try readRegular(fd, path: path, limit: limit)
+}
+
+func readRegular(_ fd: Int32, path: String, limit: Int) throws -> Data {
     var st = stat()
     guard fstat(fd, &st) == 0, (st.st_mode & S_IFMT) == S_IFREG else { throw Fail(message: "\(path): not a regular file") }
     guard st.st_size <= limit else { throw Fail(message: "\(path): larger than \(limit) bytes") }
@@ -37,6 +41,25 @@ func readRegular(_ path: String, limit: Int) throws -> Data {
     }
     guard out.count <= limit else { throw Fail(message: "\(path): larger than \(limit) bytes") }
     return out
+}
+
+/// The caller-selected repository root is canonical; all components below it remain descriptor-relative and no-follow.
+func authoredIcon(root: String, plugin: String, path: String) throws -> Data {
+    let displayPath = root + "/plugins/" + plugin + "/" + path
+    var directory = open(root, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+    guard directory >= 0 else { throw Fail(message: "cannot open repository root: \(root)") }
+    defer { close(directory) }
+    let components = ["plugins", plugin] + path.split(separator: "/").map(String.init)
+    for component in components.dropLast() {
+        let next = openat(directory, component, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        guard next >= 0 else { throw Fail(message: "\(displayPath): invalid icon directory") }
+        close(directory)
+        directory = next
+    }
+    let fd = openat(directory, components.last!, O_RDONLY | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC)
+    guard fd >= 0 else { throw Fail(message: "cannot open authored icon: \(displayPath)") }
+    defer { close(fd) }
+    return try readRegular(fd, path: displayPath, limit: 65_536)
 }
 
 func json(_ path: String, _ what: String) throws -> JSONValue {
@@ -165,6 +188,7 @@ func generatedSourceFiles(_ directory: String, root: String) throws -> [String: 
 }
 
 func runSamples(root: String, directory: String) async throws {
+    let canonicalRoot = URL(fileURLWithPath: root).resolvingSymlinksInPath().path
     let config = try loadConfiguration(root)
     let configJSON = try readRegular(root + "/fixtures/config.json", limit: JavaScriptLimits.maxConfigBytes)
 
@@ -180,6 +204,11 @@ func runSamples(root: String, directory: String) async throws {
             guard Set(package.sourceFiles.keys) == Set(generated.keys),
                   package.sourceFiles.allSatisfy({ key, value in generated[key].map { value.utf8.elementsEqual($0.utf8) } == true }) else {
                 throw Fail(message: "plugins/\(name).json: sourceFiles differ from generated scripts")
+            }
+            if let icon = package.icon {
+                guard try authoredIcon(root: canonicalRoot, plugin: name, path: icon.path) == icon.data else {
+                    throw Fail(message: "plugins/\(name).json: assets differ from the authored icon")
+                }
             }
         } else {
             let scriptDirectory = FileManager.default.fileExists(atPath: root + "/src") ? "build/scripts" : "scripts"
