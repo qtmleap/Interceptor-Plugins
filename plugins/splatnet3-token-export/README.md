@@ -4,9 +4,9 @@ Nintendo Switch AppでSplatNet3を開いたときに発行されるBullet Token�
 
 ## 使い方
 
-1. パッケージをインポートして有効にし、このPluginの保存先としてiCloud Drive内の`SplatNet3`フォルダを選択します。Salmon Run用のフォルダ許可とは別です。
+1. パッケージをインポートして有効にします。
 2. Nintendo Switch AppでSplatNet3を開き、新しいTokenを取得します。
-3. Interceptorを開いてファイルを書き出し、MacへのiCloud同期を待ちます。`SplatNet3/auth.json`に次の項目が保存されます。
+3. Interceptorへ戻り、保存先の選択が表示されたらiCloud Drive内の`SplatNet3`フォルダを選びます。Salmon Run用のフォルダ許可とは別です。書き出しとMacへのiCloud同期を待つと、`SplatNet3/auth.json`に次の項目が保存されます。
 
 | 項目 | 内容 |
 | --- | --- |
