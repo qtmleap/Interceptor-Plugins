@@ -716,5 +716,53 @@
     "expected": {
       "actions": []
     }
+  },
+  {
+    "name": "Token exporter ignores a different method",
+    "plugin": "splatnet3-token-export",
+    "phase": "response.onLeave",
+    "event": {
+      "phase": "response.onLeave",
+      "request": {
+        "method": "GET",
+        "host": "api.lp1.av5ja.srv.nintendo.net",
+        "path": "/api/bullet_tokens",
+        "headers": {}
+      },
+      "response": {
+        "status": 201,
+        "headers": {},
+        "body": {
+          "bulletToken": "synthetic-token"
+        }
+      }
+    },
+    "expected": {
+      "actions": []
+    }
+  },
+  {
+    "name": "Token exporter ignores a different host",
+    "plugin": "splatnet3-token-export",
+    "phase": "response.onLeave",
+    "event": {
+      "phase": "response.onLeave",
+      "request": {
+        "method": "POST",
+        "host": "example.com",
+        "path": "/api/bullet_tokens",
+        "headers": {}
+      },
+      "response": {
+        "status": 201,
+        "headers": {},
+        "body": {
+          "bulletToken": "synthetic-token"
+        }
+      }
+    },
+    "expected": {
+      "actions": []
+    }
   }
 ]
