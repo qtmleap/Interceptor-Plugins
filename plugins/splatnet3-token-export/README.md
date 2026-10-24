@@ -1,6 +1,6 @@
 # SplatNet 3 Token Export
 
-Nintendo Switch AppでSplatNet3を開いたときに発行されるBullet Tokenを、MacでJSONを取得するためのファイルへ書き出します。このPlugin単体で利用できます。
+Nintendo Switch AppでSplatNet3を開いたときに発行されるBullet Tokenを、MacでJSONを取得するためのファイルへ書き出します。Tokenの書き出しを確認するときは、このPluginだけを有効にしてください。同じ応答に反応するPluginは本体で順に処理され、先行処理の待機や失敗の影響を受ける場合があります。
 
 ## 使い方
 
