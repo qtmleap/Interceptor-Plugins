@@ -127,6 +127,7 @@ Interceptor.attach({
 ## ビルドと検証
 
 ```sh
+git submodule update --init biome-plugins
 bun install --frozen-lockfile --ignore-scripts
 bun run build
 bun run check:authoring
@@ -165,3 +166,11 @@ bun run simulator run-package build/dev/plugins/request-summary.json request.onE
 ## 公開する
 
 パッケージの署名にはEd25519を使います。署名鍵は[公開](publishing.md)のセットアップで登録します。masterへのpush後はCIが署名して配布するため、手元で毎回署名する必要はありません。
+
+## Bunでパッケージを使う
+
+原本はTypeScript（`.ts`）で管理します。`bun add --dev --exact PACKAGE@VERSION`でパッケージを追加し、TSに`import escape from 'escape-string-regexp'`などの通常のimportを書いてください。依存関係は`package.json`と`bun.lock`で管理します。
+
+`bun run build`で型チェックし、BunがESM・CommonJS・サブパス・推移的依存を単一のJavaScriptへまとめます。型定義が別配布なら`@types`パッケージも追加してください。生成後はランタイムでのパッケージ読み込みを必要としません。
+
+InterceptorのQuickJSにある機能で動くパッケージを使ってください。Node/Bun固有APIやDOMなどは提供されません。実際の動作はシミュレーターで確認できます。詳しい範囲は[作成ガイド](https://github.com/qtmleap/Interceptor-Plugins/blob/master/docs/authoring.md#packages-with-bun)を参照してください。

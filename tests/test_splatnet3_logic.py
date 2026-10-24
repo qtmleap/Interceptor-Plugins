@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 import unittest
@@ -20,8 +21,7 @@ PAIR = {"history": H, "detail": D}
 
 
 def run(fn, *args):
-    cmd = ["bun", str(DRIVER)]
-    p = subprocess.run(cmd, input=json.dumps({"fn": fn, "args": list(args)}), capture_output=True, text=True, cwd=REPO)
+    p = subprocess.run(["bun", str(DRIVER)], input=json.dumps({"fn": fn, "args": list(args)}), capture_output=True, text=True, cwd=REPO)
     assert p.returncode == 0, p.stderr
     return json.loads(p.stdout)
 
@@ -47,47 +47,37 @@ class QueryTests(unittest.TestCase):
                                 str(REPO / "plugins/splatnet3-salmon/hooks/api.lp1.av5ja.srv.nintendo.net/api/bullet_tokens/POST.ts"),
                                 str(REPO / "types/interceptor.d.ts"),
                                 "--strict", "--target", "ES2020", "--lib", "ES2020", "--noEmit",
+                                "--module", "esnext", "--moduleResolution", "bundler",
                                 "--typeRoots", empty_types], cwd=REPO, capture_output=True, text=True)
             self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
     def test_resolve_supported(self):
-        self.assertEqual(run("resolveQueries", VERSION, CATALOG), {"ok": True, "value": PAIR})
+        self.assertEqual(run("queriesFor", VERSION), {"ok": True, "value": PAIR})
 
     def test_missing_vs_unsupported(self):
-        for v in ("", None):
-            self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "missing-context")
-        self.assertEqual(run("resolveQueries", "9.9.9-deadbeef", CATALOG)["code"], "unsupported-version")
+        self.assertEqual(run("queriesFor", "")["code"], "missing-context")
+        self.assertEqual(run("queriesFor", "9.9.9-deadbeef")["code"], "unsupported-version")
 
     def test_exact_versions_resolve_independently(self):
-        self.assertEqual(run("resolveQueries", VERSION, CATALOG)["value"], PAIR)
-        self.assertEqual(run("resolveQueries", VERSION_10, CATALOG)["value"], {"history": H10, "detail": D10})
+        self.assertEqual(run("queriesFor", VERSION)["value"], PAIR)
+        self.assertEqual(run("queriesFor", VERSION_10)["value"], {"history": H10, "detail": D10})
         for v in ("10.0.0", "10.0.0-D15503C4", "10.0.1-d15503c4"):
-            self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "unsupported-version")
+            self.assertEqual(run("queriesFor", v)["code"], "unsupported-version")
 
-    def test_inherited_and_malformed(self):
+    def test_inherited_names_are_unsupported(self):
         for v in ("__proto__", "constructor", "toString"):
-            self.assertEqual(run("resolveQueries", v, CATALOG)["code"], "unsupported-version")
-        bad = {"versions": {VERSION: {"history": "xyz", "detail": D}}}
-        self.assertEqual(run("resolveQueries", VERSION, bad)["code"], "invalid-catalog")
-        bad = {"versions": {VERSION: {"history": H.upper(), "detail": D}}}
-        self.assertEqual(run("resolveQueries", VERSION, bad)["code"], "invalid-catalog")
-        self.assertEqual(run("resolveQueries", VERSION, {})["code"], "invalid-catalog")
-        self.assertEqual(run("resolveQueries", VERSION, {"versions": {VERSION: {"history": H}}})["code"], "invalid-catalog")
+            self.assertEqual(run("queriesFor", v)["code"], "unsupported-version")
 
-    def test_request_bodies(self):
-        ext = lambda h: {"persistedQuery": {"version": 1, "sha256Hash": h}}
-        self.assertEqual(run("makeHistoryQuery", PAIR)["value"], {"variables": {}, "extensions": ext(H)})
-        self.assertEqual(run("makeDetailQuery", PAIR, "synthetic-id")["value"],
-                         {"variables": {"coopHistoryDetailId": "synthetic-id"}, "extensions": ext(D)})
-        self.assertEqual(run("makeDetailQuery", PAIR, "")["code"], "invalid-id")
-        self.assertEqual(run("makeDetailQuery", PAIR, "é" * 257)["code"], "invalid-id")
-        self.assertEqual(run("makeHistoryQuery", {"history": "x", "detail": D})["code"], "invalid-catalog")
+    def test_catalog_matches_documented_hashes(self):
+        for version, pair in CATALOG["versions"].items():
+            self.assertEqual(run("queriesFor", version)["value"], pair)
 
-    def test_observation_hashes_match_catalog(self):
-        self.assertEqual(run("observationHashes", CATALOG)["value"], [H, D, H10, D10])
-        two = {"versions": {VERSION: PAIR, "5.0.0-aaaaaaaa": {"history": H, "detail": "a" * 64}}}
-        self.assertEqual(run("observationHashes", two)["value"], [H, D, "a" * 64])
-        self.assertNotIn("b" * 64, run("observationHashes", two)["value"])
+    def test_detail_path_is_utf8_sha256(self):
+        self.assertEqual(run("detailPath", "abc")["value"],
+                         "Salmon Run/details/ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad.json")
+        for id_ in ("あ" * 170 + "ab", "😀" * 128, "a/b+c==", "é" * 256):
+            digest = hashlib.sha256(id_.encode()).hexdigest()
+            self.assertEqual(run("detailPath", id_)["value"], f"Salmon Run/details/{digest}.json")
 
 
 class HistoryTests(unittest.TestCase):
@@ -102,96 +92,73 @@ class HistoryTests(unittest.TestCase):
         self.assertEqual(self.ids(history())["value"], [])
         self.assertEqual(self.ids(history([]))["value"], [])
         for bad in (None, [], {}, {"data": None}, {"data": {}}, {"data": {"coopResult": None}},
-                    {"data": {"coopResult": {}}}, {"data": {"coopResult": {"historyGroups": {"nodes": {}}}}},
-                    {"data": {"coopResult": {"historyGroups": {"nodes": [None]}}}},
-                    {"data": {"coopResult": {"historyGroups": {"nodes": [{"historyDetails": {}}]}}}},
-                    {"data": {"coopResult": {"historyGroups": {"nodes": [{"historyDetails": {"nodes": [None]}}]}}}}):
+                    {"data": {"coopResult": {}}}, {"data": {"coopResult": {"historyGroups": {"nodes": {}}}}}):
             self.assertEqual(self.ids(bad)["code"], "invalid-response", bad)
+
+    def test_groups_without_detail_nodes_contribute_no_ids(self):
+        self.assertEqual(self.ids({'data': {'coopResult': {'historyGroups': {'nodes': [None, {},
+            {'historyDetails': {}}, {'historyDetails': {'nodes': []}}]}}}})['value'], [])
 
     def test_graphql_errors(self):
         ok = history(["a"])
         self.assertEqual(self.ids({**ok, "errors": [{"message": "x"}]})["code"], "graphql")
         self.assertEqual(self.ids({"errors": [{"message": "x"}]})["code"], "graphql")
         self.assertEqual(self.ids({**ok, "errors": None})["value"], ["a"])
-        for bad in ("oops", {}, [], [1]):
-            self.assertEqual(self.ids({**ok, "errors": bad})["code"], "invalid-response", bad)
+        self.assertEqual(self.ids({**ok, "errors": []})["value"], ["a"])
+        for bad in ("oops", {}, [1], False, 0, ""):
+            self.assertEqual(self.ids({**ok, "errors": bad})["code"], "graphql", bad)
 
-    def test_limits(self):
-        self.assertEqual(self.ids(history([f"id{i}" for i in range(250)]))["value"],
-                         [f"id{i}" for i in range(250)])
-        ids = [f"id{i}" for i in range(256)]
+    def test_large_history_preserves_all_unique_ids_in_order(self):
+        ids = [f"id{i}" for i in range(300)]
         self.assertEqual(self.ids(history(ids[:100], ids[100:] + ids[:5]))["value"], ids)
-        self.assertEqual(self.ids(history(ids + ["extra"]))["code"], "limit")
-        self.assertEqual(self.ids(history([f"id{i}" for i in range(257)]))["code"], "limit")
-        self.assertEqual(self.ids(history(ids, only_first=["extra"]))["code"], "limit")
+        self.assertEqual(self.ids(history(ids, only_first=[["extra"]]))["value"], ids + ["extra"])
 
-    def test_invalid_ids(self):
-        for bad in ("", "x" * 513, "é" * 257, 5, None):
-            self.assertEqual(self.ids(history([bad]))["code"], "invalid-id", bad)
-        self.assertEqual(self.ids(history(["é" * 256]))["value"], ["é" * 256])
+    def test_only_nonempty_string_ids_are_followed(self):
+        self.assertEqual(self.ids(history(["", 5, None, "d1", "d1", "d2"]))["value"], ["d1", "d2"])
+        for identifier in ("x" * 513, "é" * 257, "あ" * 300):
+            self.assertEqual(self.ids(history([identifier]))["value"], [identifier])
 
 
 class DetailTests(unittest.TestCase):
-    def insp(self, status, body, eid="d1"):
-        args = [status, body, eid]
-        return run("inspectDetail", *args)["value"]
+    """detailAvailable: true when valid, false when the result is gone, else raises a code."""
+
+    def check(self, body, eid="d1"):
+        return run("detailAvailable", body, eid)
 
     def test_valid_and_fixture(self):
-        self.assertEqual(self.insp(200, detail()), {"kind": "detail", "id": "d1"})
+        self.assertEqual(self.check(detail()), {"ok": True, "value": True})
         body = json.loads((FIX / "detail-valid.json").read_text())
-        self.assertEqual(self.insp(200, body, "synthetic-detail-1")["id"], "synthetic-detail-1")
-
-    def test_http_statuses(self):
-        for s in (401, 403):
-            self.assertEqual(self.insp(s, None), {"kind": "failure", "code": "recapture"})
-        self.assertEqual(self.insp(404, "<html>not json"), {"kind": "unavailable"})
-        self.assertEqual(self.insp(404, None), {"kind": "unavailable"})
-        for s in (400, 429, 500, 302, 199):
-            self.assertEqual(self.insp(s, detail()), {"kind": "failure", "code": "http"})
+        self.assertEqual(self.check(body, "synthetic-detail-1"), {"ok": True, "value": True})
 
     def test_graphql_errors(self):
-        pq = {"errors": [{"message": "PersistedQueryNotFound"}]}
-        self.assertEqual(self.insp(200, pq), {"kind": "failure", "code": "query-rejected"})
-        self.assertEqual(self.insp(200, {"errors": [{"extensions": {"code": "PERSISTED_QUERY_NOT_FOUND"}}]})["code"], "query-rejected")
-        self.assertEqual(self.insp(200, {"errors": [{"message": "boom"}]})["code"], "graphql")
-        self.assertEqual(self.insp(200, {**detail(), "errors": [{"message": "partial"}]})["code"], "graphql")
-        self.assertEqual(self.insp(200, {**detail(), "errors": "x"})["code"], "invalid-response")
+        self.assertEqual(self.check({"errors": [{"message": "PersistedQueryNotFound"}]})["code"], "query-rejected")
+        self.assertEqual(self.check({"errors": [{"message": "boom"}]})["code"], "graphql")
+        self.assertEqual(self.check({**detail(), "errors": [{"message": "partial"}]})["code"], "graphql")
+        self.assertEqual(self.check({**detail(), "errors": "x"})["code"], "graphql")
+        self.assertEqual(self.check({**detail(), "errors": None}), {"ok": True, "value": True})
+        self.assertEqual(self.check({**detail(), "errors": []}), {"ok": True, "value": True})
 
     def test_null_and_malformed(self):
-        self.assertEqual(self.insp(200, {"data": {"coopHistoryDetail": None}}), {"kind": "unavailable"})
-        for bad in (None, "text", [], {}, {"data": None}, {"data": {}}, {"data": {"coopHistoryDetail": "x"}}):
-            self.assertEqual(self.insp(200, bad), {"kind": "failure", "code": "invalid-response"}, bad)
+        self.assertEqual(self.check({"data": {"coopHistoryDetail": None}}), {"ok": True, "value": False})
+        for bad in (None, "text", [], {}, {"data": None}, {"data": {}}):
+            self.assertEqual(self.check(bad)["code"], "invalid-response", bad)
+        self.assertEqual(self.check({"data": {"coopHistoryDetail": "x"}})["code"], "id-mismatch")
 
     def test_id_checks(self):
-        self.assertEqual(self.insp(200, detail("other")), {"kind": "failure", "code": "id-mismatch"})
+        self.assertEqual(self.check(detail("other"))["code"], "id-mismatch")
         for bad in (None, "", 5):
             body = detail(); body["data"]["coopHistoryDetail"]["id"] = bad
-            self.assertEqual(self.insp(200, body)["code"], "id-mismatch", bad)
+            self.assertEqual(self.check(body)["code"], "id-mismatch", bad)
         del body["data"]["coopHistoryDetail"]["id"]
-        self.assertEqual(self.insp(200, body)["code"], "id-mismatch")
+        self.assertEqual(self.check(body)["code"], "id-mismatch")
 
-    def test_principal_checks(self):
-        for bad in (None, "", "x" * 513, "é" * 257, 7):
-            body = detail(player=bad)
-            self.assertEqual(self.insp(200, body), {"kind": "failure", "code": "invalid-principal"}, bad)
-        for mut in (lambda d: d["data"]["coopHistoryDetail"].pop("myResult"),
-                    lambda d: d["data"]["coopHistoryDetail"]["myResult"].pop("player")):
-            body = detail(); mut(body)
-            self.assertEqual(self.insp(200, body)["code"], "invalid-principal")
-        self.assertEqual(self.insp(200, detail(player="p2"), "d1")["kind"], "detail")
+    def test_only_detail_identity_is_required(self):
+        self.assertEqual(self.check({"data": {"coopHistoryDetail": {"id": "d1"}}})["value"], True)
+        for player in (None, "", 7, {"unknown": "field"}):
+            self.assertEqual(self.check(detail(player=player))["value"], True)
 
-    def test_invalid_expected(self):
-        self.assertEqual(self.insp(200, detail(), ""), {"kind": "failure", "code": "invalid-expected"})
-        self.assertEqual(self.insp(200, detail(), "é" * 257)["code"], "invalid-expected")
-
-    def test_outcomes_never_echo_bodies(self):
-        out = self.insp(200, {"errors": [{"message": "SECRET-TOKEN"}]})
-        self.assertNotIn("SECRET", json.dumps(out))
-
-    def test_unavailable_then_valid(self):
-        first = self.insp(404, "gone", "d1")
-        second = self.insp(200, detail("d2", "p1"), "d2")
-        self.assertEqual((first["kind"], second["kind"]), ("unavailable", "detail"))
+    def test_errors_never_echo_bodies(self):
+        self.assertNotIn("SECRET", json.dumps(self.check({"errors": [{"message": "SECRET-TOKEN"}]})))
 
 
 if __name__ == "__main__":

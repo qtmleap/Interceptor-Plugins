@@ -26,11 +26,11 @@ class SalmonQuickJSTests(unittest.TestCase):
         assert build.returncode == 0, build.stdout + build.stderr
         (ROOT / 'build/evidence').mkdir(parents=True, exist_ok=True)
 
-    def execute(self, replies, *, save_fail_at=None):
+    def execute(self, replies, *, save_fail_at=None, token='synthetic-token', max_results=50):
         event = {'phase': 'response.onLeave', 'request': {
             'method': 'POST', 'host': 'api.lp1.av5ja.srv.nintendo.net', 'path': '/api/bullet_tokens',
             'headers': {'x-web-view-ver': fx.VERSION, 'accept-language': 'ja-JP'}},
-            'response': {'status': 201, 'headers': {}, 'body': {'bulletToken': 'synthetic-token', 'lang': 'ja-JP'}}}
+            'response': {'status': 201, 'headers': {}, 'body': {'bulletToken': token, 'lang': 'ja-JP'}}}
         packets = b''
         planned_saves = 0
         if isinstance(replies, bytes):
@@ -47,7 +47,7 @@ class SalmonQuickJSTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='splatnet3-quickjs-') as directory:
             event_path, config_path = Path(directory) / 'event.json', Path(directory) / 'config.json'
             event_path.write_text(json.dumps(event))
-            config_path.write_text(json.dumps({'endpoints': {}, 'settings': {'maxResults': 50}}))
+            config_path.write_text(json.dumps({'endpoints': {}, 'settings': {'maxResults': max_results}}))
             proc = subprocess.run([str(SIMULATOR), 'run-package-fetch',
                                    str(ROOT / 'build/dev/plugins/splatnet3-salmon.json'), 'response.onLeave',
                                    str(event_path), str(config_path)], input=packets, capture_output=True, timeout=20)
@@ -89,7 +89,7 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(bodies[0]['extensions']['persistedQuery']['sha256Hash'], fx.HISTORY)
         self.assertEqual([body['variables']['coopHistoryDetailId'] for body in bodies[1:]], ['d1', 'd2'])
         self.assertTrue(all(body['extensions']['persistedQuery']['sha256Hash'] == fx.DETAIL for body in bodies[1:]))
-        self.assertEqual(result['actions'][0]['json']['acquired'], ['d1', 'd2'])
+        self.assertEqual(result['actions'][0]['json']['acquired'], 2)
         self.assertNotIn('synthetic-token', json.dumps(result))
 
     def test_expired_token_stops_the_quickjs_chain(self):
@@ -136,7 +136,7 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual([contents.decode() for _, _, contents in self.saves], [history, detail])
         self.assertEqual([(storage, path) for storage, path, _ in self.saves],
                          [('icloud', 'Salmon Run/history.json'), ('icloud', fx.detail_path('d1'))])
-        self.assertEqual(result['actions'][0]['json']['acquired'], ['d1'])
+        self.assertEqual(result['actions'][0]['json']['acquired'], 1)
 
     def test_save_failure_stops_later_work_in_the_real_bridge(self):
         proc, requests, result = self.execute([(200, fx.history(['d1', 'd2'])),
@@ -157,4 +157,58 @@ class SalmonQuickJSTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr.decode())
         self.assertEqual(len(requests), 21)
         self.assertEqual(len(self.saves), 21)
-        self.assertEqual(result['actions'][0]['json']['acquired'], ids)
+        self.assertEqual(result['actions'][0]['json']['acquired'], 20)
+
+    def test_long_non_ascii_id_hash_in_real_quickjs(self):
+        id_ = 'あ' * 300
+        proc, _, result = self.execute([(200, fx.history([id_])), (200, fx.detail(id_))])
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual([path for _, path, _ in self.saves], ['Salmon Run/history.json', fx.detail_path(id_)])
+        self.assertEqual(result['actions'][0]['json']['acquired'], 1)
+
+    def test_long_ids_finish_after_all_raw_files_are_saved(self):
+        # Each request is below 8 KiB; listing all IDs would exceed the 32 KiB result cap.
+        # Quotes and backslashes also exercise JSON-escaping overhead.
+        ids = [str(n) + 'x"\\' * 300 for n in range(50)]
+        texts = [json.dumps(body) + '\n' for body in [fx.history(ids)] + [fx.detail(id_) for id_ in ids]]
+        self.assertGreater(len(json.dumps(ids).encode()), 32768)
+        proc, requests, result = self.execute([(200, text) for text in texts])
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual(len(requests), 51)
+        self.assertEqual([path for _, path, _ in self.saves],
+                         ['Salmon Run/history.json'] + [fx.detail_path(id_) for id_ in ids])
+        self.assertEqual([contents for _, _, contents in self.saves], [text.encode() for text in texts])
+        self.assertEqual(result['actions'][0]['json'],
+                         {'version': fx.VERSION, 'acquired': 50, 'unavailable': 0, 'remaining': 0})
+        self.assertLessEqual(len(json.dumps(result).encode()), 32768)
+
+    def test_unavailable_long_ids_keep_the_diagnostic_result_bounded(self):
+        ids = [str(n) + 'x"\\' * 300 for n in range(50)]
+        history = json.dumps(fx.history(ids)) + '\n'
+        proc, requests, result = self.execute([(200, history)] + [(404, {})] * 50)
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual(len(requests), 51)
+        self.assertEqual(self.saves, [('icloud', 'Salmon Run/history.json', history.encode())])
+        self.assertEqual(result['actions'][0]['json'],
+                         {'version': fx.VERSION, 'acquired': 0, 'unavailable': 50, 'remaining': 0})
+        self.assertLessEqual(len(json.dumps(result).encode()), 32768)
+
+    def test_native_host_rejects_unsafe_token_headers_without_exposing_values(self):
+        for token in ['private\r\ntoken', 'x' * 5000]:
+            with self.subTest(length=len(token)):
+                proc, requests, result = self.execute([], token=token)
+                self.assertEqual(proc.returncode, 6, proc.stderr.decode())
+                self.assertEqual(requests, [])
+                self.assertEqual(self.saves, [])
+                self.assertIsNone(result)
+                self.assertNotIn(token.encode(), proc.stderr + proc.stdout)
+
+    def test_large_history_minimal_detail_and_empty_errors_in_real_quickjs(self):
+        ids = [f'd{i}' for i in range(300)]
+        body = {'data': {'coopHistoryDetail': {'id': ids[0]}}, 'errors': []}
+        proc, requests, result = self.execute([(200, {**fx.history(ids), 'errors': []}), (200, body)], max_results=1)
+        self.assertEqual(proc.returncode, 0, proc.stderr.decode())
+        self.assertEqual(len(requests), 2)
+        self.assertEqual(len(self.saves), 2)
+        self.assertEqual(result['actions'][0]['json']['remaining'], 299)
+        self.assertEqual(json.loads(self.saves[1][2]), body)

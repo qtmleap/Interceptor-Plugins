@@ -1,0 +1,12 @@
+engine biome(1.0)
+language js(typescript, jsx)
+
+// The upstream snippet misses declaration forms on Biome 2.6. Match the CST instead.
+or { JsVariableDeclaration(), JsForVariableDeclaration() } as $declaration where {
+    $declaration <: r"let[\s\S]*",
+    register_diagnostic(
+        span = $declaration,
+        message = "Mutable bindings are forbidden. Use const.",
+        severity = "error"
+    )
+}

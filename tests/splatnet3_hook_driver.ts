@@ -1,20 +1,16 @@
 // Offline transport fixture; the generated Plugin itself is evaluated unchanged.
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
-import ts from 'typescript'
 
 const input = JSON.parse(readFileSync(0, 'utf8'))
-const source = readFileSync(input.source, 'utf8')
-const code = input.source.endsWith('.ts')
-  ? ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.None } }).outputText
-  : source
-let hooks: any
+const code = readFileSync(input.source, 'utf8')
+const registered: { hooks?: any } = {}
 const requests: any[] = []
 const replies = input.replies ?? []
 const saves: { storage: string; path: string; contents: string; failed?: boolean }[] = []
 const context = vm.createContext({
   Interceptor: {
-    attach(value: any) { hooks = value },
+    attach(value: any) { registered.hooks = value },
     Storage: { local: 'local', iCloudDrive: 'icloud' },
     async createFile(options: { storage: string; atPath: string; contents: string | Uint8Array }) {
       const failed = input.saveFailAt === saves.length + 1
@@ -36,7 +32,7 @@ const context = vm.createContext({
 })
 vm.runInContext(code, context, { timeout: 1000 })
 try {
-  const result = await hooks.response.onLeave(input.response, { endpoints: {}, settings: input.settings ?? {} })
+  const result = await registered.hooks.response.onLeave(input.response, { endpoints: {}, settings: input.settings ?? {} })
   console.log(JSON.stringify({ ok: true, result: result ?? null, requests, saves }))
 } catch (e) {
   console.log(JSON.stringify({ ok: false, code: (e as Error).message, requests, saves }))

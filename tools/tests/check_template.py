@@ -16,15 +16,17 @@ def main():
     parser.add_argument("--verifier", required=True)
     parser.add_argument("--publisher", required=True)
     args = parser.parse_args()
+    if not (args.root / 'biome-plugins/no-let.grit').is_file():
+        sys.exit('Initialize lint rules with git submodule update --init biome-plugins')
     with tempfile.TemporaryDirectory(prefix="interceptor-template-") as directory:
         root = Path(directory)
-        ignore = shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc")
-        for name in (".github", ".devcontainer", ".vscode", "tools", "tests", "plugins", "src", "scripts", "types", "manifests", "fixtures", "website", "docs"):
+        ignore = shutil.ignore_patterns(".build", ".swiftpm", "__pycache__", "*.pyc", ".git")
+        for name in (".github", ".devcontainer", ".vscode", "tools", "tests", "plugins", "src", "scripts", "types", "manifests", "fixtures", "website", "docs", "biome-plugins"):
             if name in ("plugins", "src", "scripts", "manifests") and not (args.root / name).exists():
                 continue
             shutil.copytree(args.root / name, root / name, ignore=ignore)
         shutil.copy(args.root / "repository-config.json", root / "repository-config.json")
-        for name in ("package.json", "bun.lock", ".bun-version", "tsconfig.json"):
+        for name in ("package.json", "bun.lock", ".bun-version", "tsconfig.json", "biome.json", ".gitmodules"):
             shutil.copy(args.root / name, root / name)
 
         def run(*command):

@@ -126,6 +126,7 @@ The runtime produces `mutation`; callback authors only edit `body`. Use `expectE
 ## Build and validate
 
 ```sh
+git submodule update --init biome-plugins
 bun install --frozen-lockfile --ignore-scripts
 bun run build
 bun run check:authoring
@@ -164,3 +165,11 @@ After building, run `.tools/bin/interceptor-simulator` directly. A binary for th
 ## Publish
 
 Packages use Ed25519 signing. Register the key with [Publishing](publishing.md); CI signs and distributes on pushes to master.
+
+## Packages with Bun
+
+Keep authored sources in TypeScript (`.ts`). Add dependencies with `bun add --dev --exact PACKAGE@VERSION`, then write ordinary imports such as `import escape from 'escape-string-regexp'`. `package.json` and `bun.lock` manage the dependency versions.
+
+`bun run build` typechecks the source and bundles ESM, CommonJS, package subpaths and transitive dependencies into one JavaScript file per hook. Install a separately published `@types` package when needed. The generated script needs no runtime package loader.
+
+Use packages compatible with Interceptor's QuickJS host; Node/Bun APIs and DOM globals are not provided. Test actual behavior with the simulator. See [Packages with Bun](https://github.com/qtmleap/Interceptor-Plugins/blob/master/docs/authoring.md#packages-with-bun) for details.
