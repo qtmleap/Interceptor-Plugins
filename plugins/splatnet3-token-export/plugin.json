@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "id": "75BF2B34-2A55-4AD3-896B-3AC9AA2EF3B4",
+  "name": "SplatNet 3 Token Export",
+  "version": "1.0.0",
+  "publishedAt": "2026-10-24T21:35:05Z",
+  "read": {
+    "metadata": [
+      "status"
+    ],
+    "headers": [
+      "x-web-view-ver",
+      "accept-language",
+      "user-agent"
+    ],
+    "queryKeys": [],
+    "body": {
+      "mode": "json"
+    }
+  },
+  "write": {
+    "requestBody": false,
+    "responseBody": false,
+    "files": true
+  },
+  "endpointBindings": [],
+  "settings": {}
+}
