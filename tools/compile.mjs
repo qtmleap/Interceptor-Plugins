@@ -221,12 +221,14 @@ function scopedSource(code, name) {
 
 function checkRuntimeLoading(contents, name) {
   const { parsed, checker } = scopedSource(contents, name);
+  const staticSpecifier = node => ts.isParenthesizedExpression(node)
+    ? staticSpecifier(node.expression) : ts.isStringLiteralLike(node);
   const walk = node => {
     if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) throw new Error(`Unsupported import.meta in package file ${name}`);
     if (ts.isCallExpression(node)) {
       const requireCall = ts.isIdentifier(node.expression) && node.expression.text === 'require';
       const dynamicImport = node.expression.kind === ts.SyntaxKind.ImportKeyword;
-      if ((requireCall || dynamicImport) && (node.arguments.length !== 1 || !ts.isStringLiteralLike(node.arguments[0]))) {
+      if ((requireCall || dynamicImport) && (node.arguments.length !== 1 || !staticSpecifier(node.arguments[0]))) {
         const symbol = requireCall ? checker.getSymbolAtLocation(node.expression) : null;
         if (!symbol?.declarations?.some(declaration => declaration.getSourceFile() === parsed)) {
           throw new Error(`Unsupported runtime module loading in ${name}: use a static package dependency`);

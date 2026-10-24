@@ -73,9 +73,10 @@ class BundlingTests(Case):
         self.assertEqual(self.fetch_result(output), 'transitive')
 
     def test_constant_template_literal_require_is_bundled(self):
-        for index, gap in enumerate(['', ' /* static dependency */ ']):
-            with self.subTest(gap=gap):
-                package = self.package('exports.value = require' + gap + '(`./value.js`);', type='commonjs')
+        for index, (gap, argument) in enumerate([('', '`./value.js`'), (' /* static dependency */ ', '`./value.js`'),
+                                                 ('', '("./value.js")'), ('', '((`./value.js`))')]):
+            with self.subTest(gap=gap, argument=argument):
+                package = self.package('exports.value = require' + gap + '(' + argument + ');', type='commonjs')
                 package['value.js'] = "module.exports = function(){return 'static-require';};"
                 result, output = self.compile("import {value} from 'fixture-lib';", 'value()',
                                               {'fixture-lib': package}, f'require-{index}')
@@ -83,9 +84,10 @@ class BundlingTests(Case):
                 self.assertEqual(self.fetch_result(output), 'static-require')
 
     def test_constant_template_literal_dependency_import_is_bundled(self):
-        for index, gap in enumerate(['', ' /* static dependency */ ']):
-            with self.subTest(gap=gap):
-                package = self.package('export async function value(){return (await import' + gap + '(`./value.js`)).value;}',
+        for index, (gap, argument) in enumerate([('', '`./value.js`'), (' /* static dependency */ ', '`./value.js`'),
+                                                 ('', '("./value.js")'), ('', '((`./value.js`))')]):
+            with self.subTest(gap=gap, argument=argument):
+                package = self.package('export async function value(){return (await import' + gap + '(' + argument + ')).value;}',
                                        'export function value(): Promise<string>;')
                 package['value.js'] = "export const value='static-import';"
                 result, output = self.compile("import {value} from 'fixture-lib';", 'await value()',
@@ -260,13 +262,19 @@ class BundlingTests(Case):
             ('commented-dynamic', 'export function value(key){return require /* dependency loader */ (key);}', {}),
             ('escaped-dynamic', r'export function value(key){return requ\u0069re(key);}', {}),
             ('commented-meta', 'export function value(){return import /* dependency metadata */ .meta.url;}', {}),
+            ('parenthesized-dynamic', 'export function value(key){return require(((key)));}', {}),
+            ('parenthesized-import', 'export function value(key){return import(((key)));}', {}),
+            ('parenthesized-template', 'export function value(key){return require((`./${key}.js`));}', {}),
+            ('parenthesized-import-template', 'export function value(key){return import(((`./${key}.js`)));}', {}),
+            ('parenthesized-comma', 'export function value(key){return require(("./a.js", key));}', {}),
+            ('parenthesized-two-arguments', 'export function value(key){return require(("./a.js"), key);}', {}),
         ]:
             with self.subTest(name=name):
                 package = self.package(source, 'export function value(key?: string): string;')
                 package.update(files)
                 result, output = self.compile("import {value} from 'fixture-lib';", 'value()', {'fixture-lib': package}, name)
                 self.fails(result)
-                if name in ('commented-dynamic', 'escaped-dynamic'):
+                if name in ('commented-dynamic', 'escaped-dynamic') or name.startswith('parenthesized-'):
                     self.assertIn('Unsupported runtime module loading', result.stderr)
                 elif name == 'commented-meta':
                     self.assertIn('Unsupported import.meta', result.stderr)
